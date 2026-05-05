@@ -1,0 +1,78 @@
+# policy-engine/rules.yaml — All 8 Policy Rules
+#
+# Rule schema:
+#   name:        unique identifier (snake_case)
+#   description: human-readable explanation shown to user
+#   severity:    "block" (stops deploy) or "warning" (asks confirmation)
+#   condition:   Python expression evaluated against the config dict
+#
+# NEVER add rule logic to engine.py. All rules live here.
+
+rules:
+  # ============================================================
+  # SECURITY RULES (severity: block)
+  # ============================================================
+
+  - name: public_s3_bucket
+    description: >
+      S3 bucket is configured to allow public access. Public S3 buckets are a
+      leading cause of data breaches. Deploy will be blocked until this is fixed.
+    severity: block
+    condition: "s3_bucket_public == True"
+
+  - name: open_ssh_port
+    description: >
+      SSH port 22 is open to the entire internet (0.0.0.0/0). This exposes the
+      server to brute-force attacks. Restrict SSH to a specific IP range.
+    severity: block
+    condition: "ssh_open_to_world == True"
+
+  - name: open_rdp_port
+    description: >
+      RDP port 3389 is open to the entire internet (0.0.0.0/0). This is a
+      critical security risk. Restrict RDP to a specific IP range.
+    severity: block
+    condition: "rdp_open_to_world == True"
+
+  - name: iam_wildcard_permissions
+    description: >
+      IAM policy contains wildcard (*) permissions. This violates least privilege
+      and grants excessive access. Use specific actions and resources.
+    severity: block
+    condition: "iam_wildcard == True"
+
+  # ============================================================
+  # COST RULES (severity: warning)
+  # ============================================================
+
+  - name: expensive_ec2_instance
+    description: >
+      EC2 instance type is not free-tier eligible. This will incur real AWS costs.
+      For development and testing, use t2.micro (free for 12 months on new accounts).
+    severity: warning
+    condition: "instance_type not in ['t2.micro', 't3.micro', 't4g.micro']"
+
+  # ============================================================
+  # GOVERNANCE RULES (severity: warning)
+  # ============================================================
+
+  - name: missing_s3_encryption
+    description: >
+      S3 bucket does not have server-side encryption enabled. Enable AES256
+      encryption to protect data at rest. Required for most compliance frameworks.
+    severity: warning
+    condition: "s3_encryption == False"
+
+  - name: missing_resource_tags
+    description: >
+      Resources are missing tags. Tags are required for cost attribution,
+      ownership tracking, and governance. Add at minimum: Owner and Project tags.
+    severity: warning
+    condition: "tags is None or tags == {}"
+
+  - name: cloudtrail_disabled
+    description: >
+      AWS CloudTrail is not enabled. CloudTrail records all API calls for
+      audit purposes. Strongly recommended for any production environment.
+    severity: warning
+    condition: "cloudtrail_enabled == False"
