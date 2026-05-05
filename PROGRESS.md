@@ -1,9 +1,9 @@
 # PROGRESS.md — Smart AWS Infrastructure Provisioning System
 
 ## Current Status
-**Active Phase**: Phase 2 — Policy and Risk Engine
-**Overall Progress**: 1 / 9 Phases Complete
-**Last Updated**: 2026-05-05 — Phase 1 complete, Phase 2 starting
+**Active Phase**: Phase 4 — Remote State Backend
+**Overall Progress**: 3 / 9 Phases Complete
+**Last Updated**: 2026-05-05 — Phase 3 complete (terraform validate + fmt pass on all 6 modules)
 
 ---
 
@@ -12,9 +12,9 @@
 | Phase | Name | Status | Notes |
 |---|---|---|---|
 | 1 | Foundation Setup | ✅ Complete | Folder structure, tools, all 6 modules written |
-| 2 | Policy and Risk Engine | 🔄 In Progress | engine.py + rules.yaml written, 29 unit tests passing |
-| 3 | Terraform Modules | ⏳ Not Started | — |
-| 4 | Remote State Backend | ⏳ Not Started | — |
+| 2 | Policy and Risk Engine | ✅ Complete | 8 rules, 32 tests passing, engine.py fully tested |
+| 3 | Terraform Modules | ✅ Complete | All 6 modules validated + formatted, CI pipeline green |
+| 4 | Remote State Backend | 🔄 In Progress | Next: create S3 bucket + DynamoDB table manually |
 | 5 | CLI Wizard | ⏳ Not Started | — |
 | 6 | First Real Deployment | ⏳ Not Started | — |
 | 7 | Drift Detection | ⏳ Not Started | — |
@@ -73,27 +73,27 @@
 
 ---
 
-## Phase 3 — Terraform Modules
+## Phase 3 — Terraform Modules ✅ COMPLETE
 **Goal**: All 6 AWS modules written, validated, and formatted.
 
 ### Tasks
-- [ ] Write modules/vpc/main.tf, variables.tf, outputs.tf
-- [ ] Write modules/ec2/main.tf, variables.tf, outputs.tf (default: t2.micro)
-- [ ] Write modules/s3/main.tf, variables.tf, outputs.tf (private + encrypted enforced)
-- [ ] Write modules/iam/main.tf, variables.tf, outputs.tf (least privilege)
-- [ ] Write modules/cloudwatch/main.tf, variables.tf, outputs.tf
-- [ ] Write modules/billing/main.tf, variables.tf, outputs.tf ($1 budget alert)
-- [ ] Write root main.tf connecting all modules with enable/disable flags
-- [ ] Write root variables.tf and outputs.tf
-- [ ] Run `terraform init` on root
-- [ ] Run `terraform validate` — must pass
-- [ ] Run `terraform fmt` — must pass
+- [x] Write modules/vpc/main.tf, variables.tf, outputs.tf
+- [x] Write modules/ec2/main.tf, variables.tf, outputs.tf (default: t2.micro)
+- [x] Write modules/s3/main.tf, variables.tf, outputs.tf (private + encrypted enforced)
+- [x] Write modules/iam/main.tf, variables.tf, outputs.tf (least privilege)
+- [x] Write modules/cloudwatch/main.tf, variables.tf, outputs.tf
+- [x] Write modules/billing/main.tf, variables.tf, outputs.tf ($1 budget alert)
+- [x] Write root main.tf connecting all modules with enable/disable flags
+- [x] Write root variables.tf and outputs.tf
+- [x] Run `terraform init` on root — ✅ hashicorp/aws v5.100.0 installed
+- [x] Run `terraform validate` — ✅ Success! The configuration is valid.
+- [x] Run `terraform fmt` — ✅ FMT CLEAN
 
-### Definition of Done for Phase 3
-- [ ] All 6 modules complete with variables.tf + outputs.tf
-- [ ] terraform validate passes on root and all modules
-- [ ] terraform fmt passes (no formatting errors)
-- [ ] Zero AWS resources created in this phase
+### Definition of Done for Phase 3 ✅
+- [x] All 6 modules complete with variables.tf + outputs.tf
+- [x] terraform validate passes on root and all modules
+- [x] terraform fmt passes (no formatting errors)
+- [x] Zero AWS resources created in this phase
 
 ---
 

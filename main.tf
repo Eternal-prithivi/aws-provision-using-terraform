@@ -30,6 +30,7 @@ module "ec2" {
   instance_type = var.instance_type
   ami_id        = var.ami_id
   subnet_id     = module.vpc.public_subnet_id
+  vpc_id        = module.vpc.vpc_id
   tags          = var.tags
 }
 
@@ -43,10 +44,11 @@ module "s3" {
 
 # --- IAM Module ---
 module "iam" {
-  source     = "./modules/iam"
-  enable_iam = var.enable_iam
-  role_name  = var.role_name
-  tags       = var.tags
+  source         = "./modules/iam"
+  enable_iam     = var.enable_iam
+  role_name      = var.role_name
+  s3_bucket_name = var.bucket_name
+  tags           = var.tags
 }
 
 # --- CloudWatch Module ---
