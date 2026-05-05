@@ -630,4 +630,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n  ⚠️  Wizard interrupted by user (Ctrl+C)")
+        print("  👋  Goodbye!\n")
+        sys.exit(0)
