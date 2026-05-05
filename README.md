@@ -16,6 +16,25 @@
 - **Modular Architecture** — 6 independent Terraform modules (VPC, EC2, S3, IAM, CloudWatch, Billing)
 - **98% Test Coverage** — 106 tests covering policy engine, wizard, and deployment flow
 
+## Documentation
+
+Project-facing documentation lives in the [`docs/`](docs) folder:
+
+- [Documentation Hub](docs/README.md)
+- [Product Overview](docs/product-overview.md)
+- [Architecture](docs/architecture.md)
+- [Getting Started](docs/getting-started.md)
+- [Operations Guide](docs/operations.md)
+- [Roadmap](docs/roadmap.md)
+
+## Roadmap
+
+The next planned enhancements, in order, are:
+1. Drift remediation — automatically repair drift after detection.
+2. Multi-user/team collaboration — support shared workflows for teams.
+3. OPA integration — extend policy control with Open Policy Agent.
+4. Web UI dashboard — add a visual interface for easier interaction.
+
 ---
 
 ## Quick Start

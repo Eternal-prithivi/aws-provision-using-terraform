@@ -178,6 +178,72 @@
 
 *(New entries go above this line)*
 
+## [SESSION-007] External-facing docs folder created
+**Date**: 2026-05-06
+**Agent/Human**: AI Agent (GitHub Copilot)
+**Phase**: Documentation update
+
+### Actions Taken
+- Created a new `docs/` folder with project-facing documentation
+- Added `docs/README.md`, `product-overview.md`, `architecture.md`, `getting-started.md`, `operations.md`, and `roadmap.md`
+- Updated the root `README.md` to link to the new documentation hub
+
+### Tests Run
+- [ ] pytest tests/unit/ — NOT RUN (documentation-only change)
+- [ ] pytest tests/integration/ — NOT RUN (documentation-only change)
+- [ ] terraform validate — NOT RUN (documentation-only change)
+- [ ] terraform fmt — NOT RUN (documentation-only change)
+
+### AWS Resources
+- Provisioned: none
+- Destroyed: none
+- Billing check: NOT CHECKED (documentation-only change)
+
+### Decisions Made
+- No new architecture decisions; this only improved documentation structure
+
+### PROGRESS.md Updated
+- [ ] Not updated (no phase change)
+
+### Next Session Should
+- Use the docs hub as the external-facing project reference
+
+### Issues / Blockers
+- None
+
+## [SESSION-006] Phase roadmap expanded to 14 phases
+**Date**: 2026-05-06
+**Agent/Human**: AI Agent (GitHub Copilot)
+**Phase**: Documentation update
+
+### Actions Taken
+- Expanded `PROGRESS.md` from 10 phases to a 14-phase roadmap
+- Added Phase 11 to Phase 14 in the requested order: drift remediation, multi-user collaboration, OPA integration, web UI dashboard
+- Updated `AI_CONTEXT.md`, `AI_RULES.md`, `README.md`, and `AI_MASTER.md` to match the roadmap language
+
+### Tests Run
+- [ ] pytest tests/unit/ — NOT RUN (documentation-only change)
+- [ ] pytest tests/integration/ — NOT RUN (documentation-only change)
+- [ ] terraform validate — NOT RUN (documentation-only change)
+- [ ] terraform fmt — NOT RUN (documentation-only change)
+
+### AWS Resources
+- Provisioned: none
+- Destroyed: none
+- Billing check: NOT CHECKED (documentation-only change)
+
+### Decisions Made
+- No new architecture decisions; this only reordered and documented the future roadmap
+
+### PROGRESS.md Updated
+- [x] Phase 11-14 roadmap added
+
+### Next Session Should
+- Use the new roadmap if you want to start implementing the future phases one by one
+
+### Issues / Blockers
+- None
+
 ## [SESSION-005] Phase 10 — Serverless DB (DynamoDB) added
 **Date**: 2026-05-06
 **Agent/Human**: AI Agent (GitHub Copilot) + Human

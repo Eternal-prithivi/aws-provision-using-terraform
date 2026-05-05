@@ -1,9 +1,9 @@
 # PROGRESS.md — Smart AWS Infrastructure Provisioning System
 
 ## Current Status
-**Active Phase**: ✅ PROJECT COMPLETE
-**Overall Progress**: 10 / 10 Phases Complete
-**Last Updated**: 2026-05-06 — All 10 phases complete. Project ready for submission.
+**Active Phase**: ✅ CORE PHASES COMPLETE
+**Overall Progress**: 10 / 14 Phases Complete
+**Last Updated**: 2026-05-06 — Core 10 phases complete; Phases 11-14 added as the future roadmap.
 
 ---
 
@@ -20,6 +20,11 @@
 | 7 | Drift Detection | ✅ Complete | detect.sh + daily cron workflow + drift-report.txt |
 | 8 | CI/CD Pipeline | ✅ Complete | 3 workflows: terraform, infracost, drift-detection |
 | 9 | Templates and Documentation | ✅ Complete | README.md, templates, final test suite green |
+| 10 | Serverless Database Expansion (DynamoDB) | ✅ Complete | DynamoDB module, wizard support, and tests added |
+| 11 | Drift Remediation | ⏳ Planned | Auto-fix drift after detection instead of only reporting it |
+| 12 | Multi-User Collaboration | ⏳ Planned | Shared workflows, approvals, and team-based usage |
+| 13 | OPA Integration | ⏳ Planned | Stronger policy enforcement beyond YAML rules |
+| 14 | Web UI Dashboard | ⏳ Planned | Visual interface for a friendlier user experience |
 
 ---
 
@@ -236,6 +241,46 @@
 - [x] Wizard can enable and configure a DynamoDB table and writes terraform.tfvars
 - [x] Unit tests updated and all tests passing (107/107)
 - [x] Terraform configuration validated locally
+
+---
+
+## Phase 11 — Drift Remediation ⏳ PLANNED
+**Goal**: Automatically correct infrastructure drift after it is detected.
+
+### Planned Tasks
+- [ ] Review drift-report output and map drifted resources to safe remediation actions
+- [ ] Add remediation workflow support after detection succeeds
+- [ ] Write tests for safe remediation and rollback behavior
+
+---
+
+## Phase 12 — Multi-User Collaboration ⏳ PLANNED
+**Goal**: Support shared usage for teams instead of only a single-user workflow.
+
+### Planned Tasks
+- [ ] Design shared project ownership and approval flow
+- [ ] Add team-friendly config and collaboration controls
+- [ ] Write tests for concurrent or shared usage paths
+
+---
+
+## Phase 13 — OPA Integration ⏳ PLANNED
+**Goal**: Extend policy enforcement using Open Policy Agent for richer rule management.
+
+### Planned Tasks
+- [ ] Evaluate OPA policy model against the current YAML rule engine
+- [ ] Add policy translation or compatibility support
+- [ ] Write tests to verify policy decisions remain predictable
+
+---
+
+## Phase 14 — Web UI Dashboard ⏳ PLANNED
+**Goal**: Provide a visual dashboard for easier project interaction and demos.
+
+### Planned Tasks
+- [ ] Define the dashboard workflow and user journeys
+- [ ] Build a minimal UI that mirrors the current CLI actions
+- [ ] Add tests for the dashboard integration points
 
 ---
 

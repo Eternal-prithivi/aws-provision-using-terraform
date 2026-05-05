@@ -284,6 +284,14 @@ This project is:
 
 When integrating later: this system becomes the "Infrastructure Provisioner" module feeding cost and drift data into the optimizer's dashboard.
 
+## Future Enhancements Roadmap
+
+The next planned phases, in order, are:
+1. Drift remediation — automatically fix detected drift after validation.
+2. Multi-user/team collaboration — add shared workflows for team usage.
+3. OPA integration — strengthen policy enforcement with Open Policy Agent.
+4. Web UI dashboard — provide a visual interface for easier interaction.
+
 ---
 
 *This file should be updated as architecture evolves. Update folder structure section after Phase 3.*
