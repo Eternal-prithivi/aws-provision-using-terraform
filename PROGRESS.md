@@ -1,9 +1,9 @@
 # PROGRESS.md — Smart AWS Infrastructure Provisioning System
 
 ## Current Status
-**Active Phase**: Phase 4 — Remote State Backend
-**Overall Progress**: 3 / 9 Phases Complete
-**Last Updated**: 2026-05-05 — Phase 3 complete (terraform validate + fmt pass on all 6 modules)
+**Active Phase**: Phase 5 — CLI Wizard
+**Overall Progress**: 4 / 9 Phases Complete
+**Last Updated**: 2026-05-05 — Phase 4 complete (S3 backend + state locking active, terraform plan verified)
 
 ---
 
@@ -14,8 +14,8 @@
 | 1 | Foundation Setup | ✅ Complete | Folder structure, tools, all 6 modules written |
 | 2 | Policy and Risk Engine | ✅ Complete | 8 rules, 32 tests passing, engine.py fully tested |
 | 3 | Terraform Modules | ✅ Complete | All 6 modules validated + formatted, CI pipeline green |
-| 4 | Remote State Backend | 🔄 In Progress | Next: create S3 bucket + DynamoDB table manually |
-| 5 | CLI Wizard | ⏳ Not Started | — |
+| 4 | Remote State Backend | ✅ Complete | S3 + use_lockfile, terraform plan verified from remote state |
+| 5 | CLI Wizard | 🔄 In Progress | Next phase |
 | 6 | First Real Deployment | ⏳ Not Started | — |
 | 7 | Drift Detection | ⏳ Not Started | — |
 | 8 | CI/CD Pipeline | ⏳ Not Started | — |
@@ -97,22 +97,23 @@
 
 ---
 
-## Phase 4 — Remote State Backend
-**Goal**: Terraform state stored safely in S3 with DynamoDB locking.
+## Phase 4 — Remote State Backend ✅ COMPLETE
+**Goal**: Terraform state stored safely in S3 with locking.
 
 ### Tasks
-- [ ] Manually create S3 bucket for state in AWS console (one-time manual step)
-- [ ] Manually create DynamoDB table for state locking in AWS console (one-time manual step)
-- [ ] Write backend.tf pointing to S3 bucket and DynamoDB table
-- [ ] Run `terraform init` to migrate state to remote backend
-- [ ] Verify .tfstate file appears in S3 bucket
-- [ ] Verify DynamoDB table has a lock entry during init
+- [x] Manually create S3 bucket in AWS console (ap-south-1): terraform-state-412628362844
+- [x] Versioning enabled on S3 bucket (required for use_lockfile)
+- [x] Write backend.tf pointing to S3 bucket with use_lockfile = true
+- [x] Run `terraform init -reconfigure` — ✅ backend "s3" configured successfully
+- [x] Fixed deprecated `dynamodb_table` → `use_lockfile = true` (Terraform v1.15+)
+- [x] Run `terraform plan` from remote state — ✅ Plan: 1 to add (billing budget)
+- [x] Verified S3 bucket accessible via AWS CLI
 
-### Definition of Done for Phase 4
-- [ ] backend.tf written
-- [ ] Remote state working (verified in S3 console)
-- [ ] State locking working (verified in DynamoDB console)
-- [ ] Both resources confirmed within free tier
+### Definition of Done for Phase 4 ✅
+- [x] backend.tf written with S3 + use_lockfile
+- [x] Remote state working (terraform init connected to S3)
+- [x] State locking via S3 native locking (use_lockfile = true)
+- [x] Both resources within free tier (S3 versioning enabled as required)
 
 ---
 

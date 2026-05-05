@@ -1,43 +1,29 @@
-# backend.tf — Remote State Configuration
+# backend.tf — Remote State Configuration (Option A: S3 + DynamoDB)
+# S3 bucket name: terraform-state-412628362844
+# DynamoDB table: terraform-state-lock
+# Region: ap-south-1 (Mumbai)
 #
-# SETUP REQUIRED (Phase 4 — one-time manual steps):
-# 1. Create S3 bucket in AWS console (ap-south-1):
-#    - Bucket name: terraform-state-<YOUR_ACCOUNT_ID>
-#    - Enable versioning: YES
-#    - Block all public access: YES
-#    - Estimated cost: ~$0.00 (tiny state files, fractions of a cent)
+# MANUAL PREREQUISITES (one-time, do this in AWS Console BEFORE running terraform init):
 #
-# 2. (OPTIONAL) Create DynamoDB table for state locking:
-#    - Table name: terraform-state-lock
-#    - Partition key: LockID (String)
-#    - DynamoDB has a PERMANENT free tier: 25 WCU + 25 RCU free forever.
-#    - Terraform uses ~5-10 reads/writes per month. Cost = $0.00.
-#    - Only needed if multiple people run terraform simultaneously.
-#    - As a solo developer, S3-only (Option B below) is completely safe.
+# Step 1 — S3 Bucket (ap-south-1):
+#   Name:              terraform-state-412628362844
+#   Region:            ap-south-1
+#   Versioning:        Enabled
+#   Block public access: ON (all 4 options)
 #
-# -----------------------------------------------------------------------
-# OPTION A — S3 + DynamoDB (recommended, still free for this use case)
-# -----------------------------------------------------------------------
-# terraform {
-#   backend "s3" {
-#     bucket         = "terraform-state-REPLACE_WITH_YOUR_ACCOUNT_ID"
-#     key            = "terraform.tfstate"
-#     region         = "ap-south-1"
-#     dynamodb_table = "terraform-state-lock"
-#     encrypt        = true
-#   }
-# }
+# Step 2 — DynamoDB Table (ap-south-1):
+#   Name:              terraform-state-lock
+#   Partition key:     LockID  (type: String)
+#   Capacity mode:     On-demand (PAY_PER_REQUEST) ← keeps it within free tier
+#
+# After creating both resources, uncomment the block below and run: terraform init
 
-# -----------------------------------------------------------------------
-# OPTION B — S3 only, no DynamoDB (safe for solo developers)
-# -----------------------------------------------------------------------
-# terraform {
-#   backend "s3" {
-#     bucket  = "terraform-state-REPLACE_WITH_YOUR_ACCOUNT_ID"
-#     key     = "terraform.tfstate"
-#     region  = "ap-south-1"
-#     encrypt = true
-#   }
-# }
-
-# --- Uncomment ONE option above after creating the S3 bucket in Phase 4 ---
+terraform {
+  backend "s3" {
+    bucket       = "terraform-state-412628362844"
+    key          = "terraform.tfstate"
+    region       = "ap-south-1"
+    use_lockfile = true # replaces deprecated dynamodb_table — requires S3 versioning enabled
+    encrypt      = true
+  }
+}
