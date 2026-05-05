@@ -65,3 +65,7 @@ drift-report.txt
 .vscode/
 *.swp
 *.swo
+
+# Python virtual environment
+.venv/
+venv/
