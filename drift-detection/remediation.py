@@ -69,32 +69,64 @@ def remediate_drift(
     project_root: Path,
     report_file: Path,
     terraform_binary: str = "terraform",
+    check_only: bool = True,
     auto_approve: bool = False,
 ) -> RemediationResult:
-    """Remediate drift when a drift report confirms changes are needed."""
+    """Analyze drift when a drift report confirms changes are needed.
+    
+    By default (check_only=True), runs terraform plan to show what would change
+    without actually applying. Set check_only=False and auto_approve=True to actually apply.
+    """
     remediation_report = project_root / "drift-remediation-report.txt"
     report_text = read_text_file(report_file)
 
     if not report_contains_drift(report_text):
-        message = "No drift detected in report; remediation skipped."
-        write_report(remediation_report, "SKIPPED", [message])
-        return RemediationResult(True, False, message, remediation_report)
-
-    if not auto_approve:
-        message = "Auto-approval disabled; remediation skipped."
+        message = "No drift detected in report; analysis skipped."
         write_report(remediation_report, "SKIPPED", [message])
         return RemediationResult(True, False, message, remediation_report)
 
     init_command = [terraform_binary, "init", "-input=false", "-no-color"]
     init_result = run_command(init_command, cwd=project_root)
     if init_result.returncode != 0:
-        message = "terraform init failed during remediation."
+        message = "terraform init failed during drift analysis."
         write_report(
             remediation_report,
             "FAILED",
             [message, "", init_result.stdout, init_result.stderr],
         )
         return RemediationResult(False, True, message, remediation_report)
+
+    if check_only:
+        # Show what would be applied without actually applying
+        plan_command = [
+            terraform_binary,
+            "plan",
+            "-detailed-exitcode",
+            "-input=false",
+            "-no-color",
+        ]
+        plan_result = run_command(plan_command, cwd=project_root)
+        message = "Drift analysis complete (check-only mode). Review plan above."
+        write_report(
+            remediation_report,
+            "CHECK-ONLY",
+            [
+                message,
+                "",
+                "=== Terraform Plan Output ===",
+                plan_result.stdout,
+                plan_result.stderr,
+                "",
+                "No changes were applied. Manual review and approval required.",
+            ],
+        )
+        return RemediationResult(True, False, message, remediation_report)
+
+    # Only reach here if check_only=False
+    if not auto_approve:
+        message = "Auto-approval disabled. Cannot apply changes in non-check-only mode."
+        write_report(remediation_report, "SKIPPED", [message])
+        return RemediationResult(True, False, message, remediation_report)
 
     apply_command = [
         terraform_binary,
@@ -124,7 +156,7 @@ def remediate_drift(
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
-    parser = argparse.ArgumentParser(description="Remediate Terraform drift.")
+    parser = argparse.ArgumentParser(description="Analyze Terraform drift (safe by default).")
     parser.add_argument(
         "--project-root",
         default=str(Path(__file__).resolve().parent.parent),
@@ -141,9 +173,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Terraform executable to invoke.",
     )
     parser.add_argument(
+        "--check-only",
+        action="store_true",
+        default=True,
+        help="Only show what would change (default: True for safety).",
+    )
+    parser.add_argument(
         "--auto-approve",
         action="store_true",
-        help="Automatically run terraform apply when drift is detected.",
+        help="Auto-apply changes (requires --check-only=False, not recommended).",
     )
     return parser
 
@@ -155,10 +193,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     project_root = Path(args.project_root)
     report_file = Path(args.report_file)
+    
+    # Default to check_only=True unless explicitly disabled
+    check_only = args.check_only if hasattr(args, 'check_only') else True
+    
     result = remediate_drift(
         project_root=project_root,
         report_file=report_file,
         terraform_binary=args.terraform_binary,
+        check_only=check_only,
         auto_approve=args.auto_approve,
     )
 

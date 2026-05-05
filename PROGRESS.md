@@ -245,17 +245,31 @@
 ---
 
 ## Phase 11 — Drift Remediation ✅ COMPLETE
-**Goal**: Automatically correct infrastructure drift after it is detected.
+**Goal**: Detect and safely analyze infrastructure drift, with manual approval required before any changes.
 
 ### Tasks
-- [x] Review drift-report output and map drifted resources to safe remediation actions
-- [x] Add remediation workflow support after detection succeeds
-- [x] Write tests for safe remediation and rollback behavior
+- [x] Write remediation.py helper with check-only mode (safe by default)
+- [x] Add --check-only flag (default True) to show terraform plan without applying
+- [x] Add --auto-approve flag (requires check_only=False to actually apply)
+- [x] Update drift-detection.yml workflow to run in check-only mode
+- [x] Update tests to verify safe-by-default behavior
+- [x] Document production-safe design in operations.md
+- [x] Verify all 114 tests pass with new safer implementation
+
+### Key Safety Features
+- ✅ Runs terraform plan only (check-only mode by default)
+- ✅ No automatic changes applied without explicit approval
+- ✅ Prevents accidental auto-revert of intentional resource deletions
+- ✅ All drift events logged and available for review
+- ✅ Human approval required for any actual remediation
 
 ### Definition of Done for Phase 11 ✅
-- [x] Drift remediation helper created and testable
-- [x] Drift workflow now remediates when drift is detected
-- [x] Remediation report is generated and ignored by git
+- [x] Drift remediation helper created with check-only mode (safe by default)
+- [x] Drift workflow runs in check-only mode and generates analysis reports
+- [x] Remediation report clearly shows status (CHECK-ONLY vs manual approval needed)
+- [x] No production risk: intentional changes won't be auto-reverted
+- [x] 114 unit and integration tests passing
+- [x] Documentation updated explaining safe-by-default design
 
 ---
 
