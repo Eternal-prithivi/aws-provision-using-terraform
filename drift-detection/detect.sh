@@ -7,11 +7,6 @@
 #
 # Usage:
 #   bash drift-detection/detect.sh
-#
-# Environment variables (set in GitHub Actions or locally):
-#   AWS_ACCESS_KEY_ID       — AWS credentials
-#   AWS_SECRET_ACCESS_KEY   — AWS credentials
-#   AWS_DEFAULT_REGION      — AWS region (default: ap-south-1)
 
 set -euo pipefail
 
@@ -20,10 +15,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPORT_FILE="$PROJECT_ROOT/drift-report.txt"
 TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-echo "=============================================="
-echo "  🔍 Infrastructure Drift Detection"
-echo "  Timestamp: $TIMESTAMP"
-echo "=============================================="
+echo ""
+echo "  🔍 Drift Detection — $TIMESTAMP"
+echo "  ─────────────────────────────────────"
 echo ""
 
 # Change to project root
@@ -31,21 +25,20 @@ cd "$PROJECT_ROOT"
 
 # Check terraform is available
 if ! command -v terraform &> /dev/null; then
-    echo "❌ ERROR: terraform is not installed or not in PATH"
+    echo "  ❌ terraform is not installed"
     exit 1
 fi
 
 # Run terraform init (quiet mode)
-echo "▶️  Running terraform init..."
+echo "  ▶️  Initializing..."
 if ! terraform init -input=false -no-color > /dev/null 2>&1; then
-    echo "❌ ERROR: terraform init failed"
+    echo "  ❌ terraform init failed"
     exit 1
 fi
-echo "✅  terraform init complete"
-echo ""
 
 # Run terraform plan and capture output
-echo "▶️  Running terraform plan (drift check)..."
+echo "  ▶️  Scanning for drift..."
+echo ""
 PLAN_OUTPUT=$(terraform plan -input=false -detailed-exitcode -no-color 2>&1) || PLAN_EXIT_CODE=$?
 PLAN_EXIT_CODE=${PLAN_EXIT_CODE:-0}
 
@@ -55,52 +48,66 @@ PLAN_EXIT_CODE=${PLAN_EXIT_CODE:-0}
 #   2 = Changes detected (drift found)
 
 if [ "$PLAN_EXIT_CODE" -eq 0 ]; then
-    echo "✅  No drift detected. Infrastructure matches Terraform state."
+    echo "  ✅ No drift detected"
+    echo "     Infrastructure matches Terraform code perfectly."
     echo ""
     echo "Report: No drift detected at $TIMESTAMP" > "$REPORT_FILE"
     exit 0
 
 elif [ "$PLAN_EXIT_CODE" -eq 2 ]; then
-    echo "⚠️  DRIFT DETECTED! Infrastructure has changed outside of Terraform."
-    echo ""
-    echo "─────────────────────────────────────────────"
-    echo "  Drift Report"
-    echo "─────────────────────────────────────────────"
+    echo "  ⚠️  DRIFT DETECTED!"
     echo ""
 
-    # Generate drift report
+    # Count changes
+    ADDS=$(echo "$PLAN_OUTPUT" | grep -c "will be created" || true)
+    CHANGES=$(echo "$PLAN_OUTPUT" | grep -c "will be updated" || true)
+    DESTROYS=$(echo "$PLAN_OUTPUT" | grep -c "will be destroyed" || true)
+    echo "  Summary: +$ADDS to create, ~$CHANGES to update, -$DESTROYS to destroy"
+    echo ""
+
+    # Show only the affected resources (1 line each)
+    echo "  Affected resources:"
+    echo "$PLAN_OUTPUT" | grep -E '^\s+#' | while read -r line; do
+        resource=$(echo "$line" | sed 's/^[[:space:]]*# //;s/ will be.*//;s/ must be.*//')
+        action=""
+        if echo "$line" | grep -q "created"; then
+            action="CREATE"
+        elif echo "$line" | grep -q "updated"; then
+            action="UPDATE"
+        elif echo "$line" | grep -q "destroyed"; then
+            action="DESTROY"
+        fi
+        echo "    [$action] $resource"
+    done
+    echo ""
+
+    echo "  To fix drift:"
+    echo "    terraform apply   — Make AWS match your code"
+    echo "    terraform destroy — Remove everything"
+    echo ""
+
+    # Save detailed report to file (full details only in the file)
     {
         echo "# Drift Detection Report"
         echo "Timestamp: $TIMESTAMP"
         echo "Status: DRIFT DETECTED"
+        echo "Summary: +$ADDS to create, ~$CHANGES to update, -$DESTROYS to destroy"
         echo ""
-        echo "## Changes Detected"
-        echo "$PLAN_OUTPUT" | grep -E '^\s*(#|~|\+|-|<=)' || echo "(see full plan output below)"
+        echo "## Affected Resources"
+        echo "$PLAN_OUTPUT" | grep -E '^\s+#' | sed 's/^[[:space:]]*# /  /'
         echo ""
         echo "## Full Plan Output"
         echo "$PLAN_OUTPUT"
     } > "$REPORT_FILE"
 
-    echo "  Report saved to: $REPORT_FILE"
-    echo ""
-    echo "  To resolve drift, run one of:"
-    echo "    terraform apply    — Apply Terraform config (override manual changes)"
-    echo "    terraform import   — Import manual changes into state"
-    echo ""
-
-    # Print summary of changes
-    ADDS=$(echo "$PLAN_OUTPUT" | grep -c "will be created" || true)
-    CHANGES=$(echo "$PLAN_OUTPUT" | grep -c "will be updated" || true)
-    DESTROYS=$(echo "$PLAN_OUTPUT" | grep -c "will be destroyed" || true)
-    echo "  Summary: +$ADDS added, ~$CHANGES changed, -$DESTROYS destroyed"
+    echo "  📄 Full details saved to: drift-report.txt"
     echo ""
 
     exit 2
 
 else
-    echo "❌ ERROR: terraform plan failed with exit code $PLAN_EXIT_CODE"
+    echo "  ❌ terraform plan failed (exit code $PLAN_EXIT_CODE)"
     echo ""
-    echo "$PLAN_OUTPUT"
 
     {
         echo "# Drift Detection Report"
