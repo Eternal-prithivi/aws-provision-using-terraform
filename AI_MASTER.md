@@ -129,7 +129,8 @@ terraform-project/
 │   ├── s3/                         ← S3, private + encrypted enforced
 │   ├── iam/                        ← IAM, least privilege defaults
 │   ├── cloudwatch/                 ← CloudWatch monitoring
-│   └── billing/                    ← AWS Budgets billing alerts
+│   ├── billing/                    ← AWS Budgets billing alerts
+│   └── dynamodb/                   ← DynamoDB NoSQL database (Always Free)
 ├── templates/
 │   ├── static-site/                ← S3-based static website template
 │   └── backend-app/                ← EC2-based backend template

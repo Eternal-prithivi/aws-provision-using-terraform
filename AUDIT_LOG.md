@@ -177,3 +177,39 @@
 ---
 
 *(New entries go above this line)*
+
+## [SESSION-005] Phase 10 — Serverless DB (DynamoDB) added
+**Date**: 2026-05-06
+**Agent/Human**: AI Agent (GitHub Copilot) + Human
+**Phase**: Phase 10 — Serverless Database Expansion
+
+### Actions Taken
+- Added DynamoDB wiring in root Terraform: variables and outputs
+- Verified `modules/dynamodb` exists and enforces encryption, PITR toggle, and provisioned capacity
+- Updated `cli-wizard/wizard.py` to add `serverless-db` template, prompts, and `WizardConfig` fields
+- Updated `tests/unit/test_wizard.py` to include DynamoDB-related assertions and dynamic template selection
+
+### Tests Run
+- [x] pytest tests/unit/ — PASS (64 tests for wizard)
+- [x] pytest tests/integration/ — PASS (43 integration tests)
+- [x] pytest tests/ — PASS (107 tests total)
+- [x] terraform validate — PASS (ran with `terraform init -backend=false`)
+- [ ] terraform fmt — NOT RUN
+
+### AWS Resources
+- Provisioned: none (no deploy executed in this session)
+- Destroyed: none
+- Billing check: NOT CHECKED (no resources provisioned)
+
+### Decisions Made
+- No changes to DECISIONS.md. Follow existing rules for DynamoDB (encryption, free-tier capacities).
+
+### PROGRESS.md Updated
+- [x] Phase 10 tasks marked complete
+
+### Next Session Should
+- Optionally run `terraform plan` with a valid backend and `terraform apply` in a controlled session (remember to destroy)
+
+### Issues / Blockers
+- None
+

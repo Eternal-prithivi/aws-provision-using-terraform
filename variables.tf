@@ -38,6 +38,49 @@ variable "enable_cloudwatch" {
   default     = false
 }
 
+# --- DynamoDB ---
+variable "enable_dynamodb" {
+  description = "Whether to create a DynamoDB table."
+  type        = bool
+  default     = false
+}
+
+variable "dynamodb_table_name" {
+  description = "Name of the DynamoDB table."
+  type        = string
+  default     = ""
+}
+
+variable "dynamodb_hash_key" {
+  description = "Hash (partition) key name for the DynamoDB table."
+  type        = string
+  default     = "id"
+}
+
+variable "dynamodb_hash_key_type" {
+  description = "Hash key attribute type (S = String, N = Number, B = Binary)."
+  type        = string
+  default     = "S"
+}
+
+variable "dynamodb_read_capacity" {
+  description = "Read capacity units for provisioned billing (<=25 for free tier)."
+  type        = number
+  default     = 5
+}
+
+variable "dynamodb_write_capacity" {
+  description = "Write capacity units for provisioned billing (<=25 for free tier)."
+  type        = number
+  default     = 5
+}
+
+variable "dynamodb_enable_pitr" {
+  description = "Enable Point-in-Time Recovery (PITR) for DynamoDB."
+  type        = bool
+  default     = false
+}
+
 # --- VPC ---
 variable "vpc_cidr" {
   description = "CIDR block for the VPC."

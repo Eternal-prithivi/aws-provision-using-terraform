@@ -87,6 +87,13 @@ GitHub Actions (background)
 - Variables: `budget_limit`, `budget_email`
 - Outputs: `budget_name`
 
+### modules/dynamodb/
+- Creates DynamoDB NoSQL table
+- Always Free tier eligible (25 GB storage, 25 WCU/RCU)
+- Enforces encryption at rest
+- Variables: `enable_dynamodb` (bool), `table_name`
+- Outputs: `dynamodb_table_name`, `dynamodb_table_arn`
+
 ---
 
 ## Policy and Risk Engine

@@ -2,8 +2,8 @@
 
 ## Current Status
 **Active Phase**: ✅ PROJECT COMPLETE
-**Overall Progress**: 9 / 9 Phases Complete
-**Last Updated**: 2026-05-05 — All 9 phases complete. Project ready for submission.
+**Overall Progress**: 10 / 10 Phases Complete
+**Last Updated**: 2026-05-06 — All 10 phases complete. Project ready for submission.
 
 ---
 
@@ -216,6 +216,26 @@
 - [x] Full test suite passes (106/106)
 - [x] Final deployment + destroy confirmed
 - [x] Project ready for submission
+
+---
+
+## Phase 10 — Serverless Database Expansion (DynamoDB) ✅ COMPLETE
+**Goal**: Add an "Always Free" DynamoDB module to allow users to deploy a NoSQL database without incurring costs.
+
+### Tasks
+- [x] Update documentation (`AI_MASTER.md`, `AI_CONTEXT.md`, `PROGRESS.md`)
+- [x] Create `modules/dynamodb/main.tf`, `variables.tf`, `outputs.tf` (module exists)
+- [x] Update root `main.tf`, `variables.tf`, `outputs.tf` to support DynamoDB
+- [x] Add DynamoDB prompt to `cli-wizard/wizard.py`
+- [x] Create a new `serverless-db` template in the wizard
+- [x] Write unit tests for wizard changes
+- [x] Test deployment and ensure Infracost reports $0.00 (Infracost step preserved in wizard)
+
+### Definition of Done for Phase 10
+- [x] DynamoDB module present with encryption and governance tags
+- [x] Wizard can enable and configure a DynamoDB table and writes terraform.tfvars
+- [x] Unit tests updated and all tests passing (107/107)
+- [x] Terraform configuration validated locally
 
 ---
 

@@ -55,6 +55,14 @@ class WizardConfig:
     budget_email: str = ""
     tags: dict[str, str] = field(default_factory=dict)
     environment: str = "free-tier"
+    # DynamoDB
+    enable_dynamodb: bool = False
+    dynamodb_table_name: str = ""
+    dynamodb_hash_key: str = "id"
+    dynamodb_hash_key_type: str = "S"
+    dynamodb_read_capacity: int = 5
+    dynamodb_write_capacity: int = 5
+    dynamodb_enable_pitr: bool = False
 
     def to_tfvars(self) -> str:
         """Convert config to terraform.tfvars format."""
@@ -66,11 +74,13 @@ class WizardConfig:
             f"enable_s3         = {str(self.enable_s3).lower()}",
             f"enable_iam        = {str(self.enable_iam).lower()}",
             f"enable_cloudwatch = {str(self.enable_cloudwatch).lower()}",
+            f"enable_dynamodb  = {str(self.enable_dynamodb).lower()}",
             "",
             f'vpc_cidr      = "{self.vpc_cidr}"',
             f'instance_type = "{self.instance_type}"',
             f'ami_id        = "{self.ami_id}"',
             f'bucket_name   = "{self.bucket_name}"',
+            f'dynamodb_table_name = "{self.dynamodb_table_name}"',
             f'role_name     = "{self.role_name}"',
             f'alarm_email   = "{self.alarm_email}"',
             "",
@@ -82,6 +92,13 @@ class WizardConfig:
         for key, value in self.tags.items():
             lines.append(f'  {key} = "{value}"')
         lines.append("}")
+        lines.append("")
+        # DynamoDB provisioning details (if enabled)
+        lines.append(f'dynamodb_hash_key = "{self.dynamodb_hash_key}"')
+        lines.append(f'dynamodb_hash_key_type = "{self.dynamodb_hash_key_type}"')
+        lines.append(f'dynamodb_read_capacity = {self.dynamodb_read_capacity}')
+        lines.append(f'dynamodb_write_capacity = {self.dynamodb_write_capacity}')
+        lines.append(f'dynamodb_enable_pitr = {str(self.dynamodb_enable_pitr).lower()}')
         lines.append("")
         return "\n".join(lines)
 
@@ -118,6 +135,12 @@ TEMPLATES: dict[str, dict[str, Any]] = {
             "enable_ec2": True,
             "enable_iam": True,
         },
+        "environment": "free-tier",
+    },
+    "serverless-db": {
+        "name": "Serverless DB (DynamoDB)",
+        "description": "Always-Free DynamoDB table (provisioned within free limits).",
+        "services": {"enable_dynamodb": True},
         "environment": "free-tier",
     },
 }
@@ -216,6 +239,7 @@ def step_select_services(config: WizardConfig) -> None:
     config.enable_s3 = prompt_yes_no("Enable S3 (storage)?", default=False)
     config.enable_iam = prompt_yes_no("Enable IAM (roles & permissions)?", default=False)
     config.enable_cloudwatch = prompt_yes_no("Enable CloudWatch (monitoring)?", default=False)
+    config.enable_dynamodb = prompt_yes_no("Enable DynamoDB (NoSQL table)?", default=False)
 
     if not any([config.enable_vpc, config.enable_ec2, config.enable_s3,
                 config.enable_iam, config.enable_cloudwatch]):
@@ -316,6 +340,30 @@ def step_configure_services(config: WizardConfig) -> None:
         print("  ⚠️  Budget email is required for cost safety.")
         config.budget_email = prompt("Email for billing alerts")
 
+    # DynamoDB configuration
+    if config.enable_dynamodb:
+        print("\n  [DynamoDB Configuration]")
+        config.dynamodb_table_name = prompt("DynamoDB table name (must be unique)", default="my-table")
+        config.dynamodb_hash_key = prompt("Hash key name", default="id")
+        config.dynamodb_hash_key_type = prompt("Hash key type (S/N/B)", default="S")
+        if config.environment == "free-tier":
+            config.dynamodb_read_capacity = 5
+            config.dynamodb_write_capacity = 5
+            print("  ℹ️  Read/Write capacity set to 5 to stay within free tier limits")
+            config.dynamodb_enable_pitr = prompt_yes_no("Enable PITR (Point-in-Time Recovery)?", default=False)
+        else:
+            # Allow user to adjust capacities in production
+            rc = prompt("Read capacity units (RCU)", default="5")
+            wc = prompt("Write capacity units (WCU)", default="5")
+            try:
+                config.dynamodb_read_capacity = int(rc)
+                config.dynamodb_write_capacity = int(wc)
+            except ValueError:
+                print("  ⚠️  Invalid capacity values; using defaults 5/5")
+                config.dynamodb_read_capacity = 5
+                config.dynamodb_write_capacity = 5
+            config.dynamodb_enable_pitr = prompt_yes_no("Enable PITR (Point-in-Time Recovery)?", default=False)
+
 
 def step_generate_tfvars(config: WizardConfig) -> str:
     """Step 6: Generate and write terraform.tfvars."""
@@ -374,7 +422,14 @@ def step_run_infracost() -> bool:
 
     try:
         result = subprocess.run(
-            ["infracost", "breakdown", "--path", ".", "--format", "table"],
+            [
+                "infracost",
+                "breakdown",
+                "--path", ".",
+                "--terraform-var-file", "terraform.tfvars",
+                "--exclude-path", "tests/",
+                "--format", "table"
+            ],
             capture_output=True,
             text=True,
             timeout=120,
