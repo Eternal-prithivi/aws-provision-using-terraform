@@ -1,0 +1,32 @@
+name: Infracost Cost Diff
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  infracost:
+    name: Infracost Cost Estimate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Generate Infracost cost estimate
+        run: |
+          infracost breakdown \
+            --path . \
+            --format json \
+            --out-file /tmp/infracost.json
+
+      - name: Post Infracost comment on PR
+        uses: infracost/actions/comment@v3
+        with:
+          path: /tmp/infracost.json
+          behavior: update

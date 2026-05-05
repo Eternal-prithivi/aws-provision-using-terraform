@@ -1,0 +1,43 @@
+# tests/fixtures/sample_rules.yaml
+# Test copy of the rules file — used in unit tests so tests don't depend on prod rules.
+
+rules:
+  - name: public_s3_bucket
+    description: S3 bucket is configured to allow public access.
+    severity: block
+    condition: "s3_bucket_public == True"
+
+  - name: open_ssh_port
+    description: SSH port 22 is open to the entire internet (0.0.0.0/0).
+    severity: block
+    condition: "ssh_open_to_world == True"
+
+  - name: open_rdp_port
+    description: RDP port 3389 is open to the entire internet (0.0.0.0/0).
+    severity: block
+    condition: "rdp_open_to_world == True"
+
+  - name: iam_wildcard_permissions
+    description: IAM policy contains wildcard (*) permissions.
+    severity: block
+    condition: "iam_wildcard == True"
+
+  - name: expensive_ec2_instance
+    description: EC2 instance type is not free-tier eligible.
+    severity: warning
+    condition: "instance_type not in ['t2.micro', 't3.micro', 't4g.micro']"
+
+  - name: missing_s3_encryption
+    description: S3 bucket does not have server-side encryption enabled.
+    severity: warning
+    condition: "s3_encryption == False"
+
+  - name: missing_resource_tags
+    description: Resources are missing tags.
+    severity: warning
+    condition: "tags is None or tags == {}"
+
+  - name: cloudtrail_disabled
+    description: AWS CloudTrail is not enabled.
+    severity: warning
+    condition: "cloudtrail_enabled == False"
