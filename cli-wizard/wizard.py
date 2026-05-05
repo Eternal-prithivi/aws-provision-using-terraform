@@ -396,6 +396,30 @@ def step_run_infracost() -> bool:
         return True
 
 
+def _parse_plan_summary(plan_output: str) -> list[str]:
+    """Extract only the resource names and summary line from terraform plan."""
+    lines = []
+    for line in plan_output.split("\n"):
+        stripped = line.strip()
+        # Capture resource-level summaries like "# module.s3.aws_s3_bucket.main[0] will be created"
+        if stripped.startswith("#") and ("will be" in stripped or "must be" in stripped):
+            # Clean up: "# module.s3.aws_s3_bucket.main[0] will be created" → readable
+            resource_line = stripped.lstrip("# ").strip()
+            if "will be created" in resource_line:
+                name = resource_line.replace(" will be created", "")
+                lines.append(f"    ＋ {name}")
+            elif "will be updated" in resource_line:
+                name = resource_line.replace(" will be updated in-place", "")
+                lines.append(f"    ~ {name}")
+            elif "will be destroyed" in resource_line:
+                name = resource_line.replace(" will be destroyed", "")
+                lines.append(f"    − {name}")
+        # Capture the "Plan: X to add..." summary line
+        elif stripped.startswith("Plan:"):
+            lines.append(f"\n  {stripped}")
+    return lines
+
+
 def step_confirm_and_deploy() -> bool:
     """Step 9-11: Final confirmation and deployment."""
     print()
@@ -436,7 +460,16 @@ def step_confirm_and_deploy() -> bool:
         print(f"  ❌  terraform plan failed:")
         print(f"  {plan_result.stderr.strip()}")
         return False
-    print(plan_result.stdout)
+
+    # Show CLEAN summary instead of raw plan
+    summary_lines = _parse_plan_summary(plan_result.stdout)
+    if summary_lines:
+        print("\n  📋 Resources to be created:")
+        for line in summary_lines:
+            print(line)
+        print()
+    else:
+        print("  ✅  No changes needed.")
 
     # Final confirmation after seeing the plan
     if not prompt_yes_no("Apply this plan?", default=False):
@@ -444,7 +477,7 @@ def step_confirm_and_deploy() -> bool:
         return False
 
     # terraform apply
-    print("\n  ▶️  Running: terraform apply -auto-approve...")
+    print("\n  ▶️  Deploying... (this may take 15-30 seconds)")
     apply_result = subprocess.run(
         ["terraform", "apply", "-auto-approve", "-input=false"],
         capture_output=True,
@@ -456,8 +489,13 @@ def step_confirm_and_deploy() -> bool:
         print(f"  {apply_result.stderr.strip()}")
         return False
 
-    print(apply_result.stdout)
-    print("  ✅  Infrastructure deployed successfully!")
+    # Show clean apply summary
+    for line in apply_result.stdout.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("Apply complete") or stripped.startswith("Outputs:"):
+            print(f"  {stripped}")
+
+    print("\n  ✅  Infrastructure deployed successfully!")
 
     # Show outputs
     print("\n  📋 Deployment Outputs:")
@@ -505,6 +543,7 @@ def handle_destroy() -> None:
         print("  ❌  Destroy cancelled.")
         return
 
+    print("\n  ▶️  Destroying... (this may take 15-30 seconds)")
     result = subprocess.run(
         ["terraform", "destroy", "-auto-approve"],
         capture_output=True,
@@ -512,9 +551,14 @@ def handle_destroy() -> None:
         cwd=project_root,
     )
     if result.returncode == 0:
-        print(result.stdout)
+        # Show only the clean summary, not the full raw output
+        for line in result.stdout.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("Destroy complete") or stripped.startswith("Plan:"):
+                print(f"  {stripped}")
+        print()
         print("  ✅  All resources destroyed successfully.")
-        print("  💰 Verify AWS billing dashboard shows $0 before closing.")
+        print("  💰  Your AWS bill: $0.00")
     else:
         print(f"  ❌  Destroy failed:")
         print(f"  {result.stderr.strip()}")
