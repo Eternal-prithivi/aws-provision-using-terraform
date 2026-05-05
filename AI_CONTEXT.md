@@ -286,11 +286,12 @@ When integrating later: this system becomes the "Infrastructure Provisioner" mod
 
 ## Future Enhancements Roadmap
 
+Phase 11 — drift remediation is now implemented.
+
 The next planned phases, in order, are:
-1. Drift remediation — automatically fix detected drift after validation.
-2. Multi-user/team collaboration — add shared workflows for team usage.
-3. OPA integration — strengthen policy enforcement with Open Policy Agent.
-4. Web UI dashboard — provide a visual interface for easier interaction.
+1. Multi-user/team collaboration — add shared workflows for team usage.
+2. OPA integration — strengthen policy enforcement with Open Policy Agent.
+3. Web UI dashboard — provide a visual interface for easier interaction.
 
 ---
 

@@ -13,8 +13,8 @@
 - **Cost Estimation** — Infracost integration shows monthly costs before you deploy
 - **Drift Detection** — Daily GitHub Actions job detects unauthorized infrastructure changes
 - **Free-Tier Safe** — Default configuration stays within AWS Free Tier ($0/month)
-- **Modular Architecture** — 6 independent Terraform modules (VPC, EC2, S3, IAM, CloudWatch, Billing)
-- **98% Test Coverage** — 106 tests covering policy engine, wizard, and deployment flow
+- **Modular Architecture** — 7 independent Terraform modules (VPC, EC2, S3, IAM, CloudWatch, Billing, DynamoDB)
+- **113 Tests** — covering policy engine, wizard, drift remediation, and deployment flow
 
 ## Documentation
 
@@ -29,11 +29,12 @@ Project-facing documentation lives in the [`docs/`](docs) folder:
 
 ## Roadmap
 
+Completed: Phase 11 (drift remediation).
+
 The next planned enhancements, in order, are:
-1. Drift remediation — automatically repair drift after detection.
-2. Multi-user/team collaboration — support shared workflows for teams.
-3. OPA integration — extend policy control with Open Policy Agent.
-4. Web UI dashboard — add a visual interface for easier interaction.
+1. Multi-user/team collaboration — support shared workflows for teams.
+2. OPA integration — extend policy control with Open Policy Agent.
+3. Web UI dashboard — add a visual interface for easier interaction.
 
 ---
 
@@ -107,8 +108,10 @@ terraform destroy
 │   ├── s3/                     # S3 bucket (private + AES256 encryption)
 │   ├── iam/                    # IAM role (least privilege)
 │   ├── cloudwatch/             # CloudWatch alarms + SNS
-│   └── billing/                # AWS Budget ($1 alert)
+│   ├── billing/                # AWS Budget ($1 alert)
+│   └── dynamodb/               # DynamoDB table (Always Free-ready)
 │
+├── docs/                      # Project-facing documentation hub
 ├── policy-engine/
 │   ├── engine.py               # PolicyEngine class (load, evaluate, report)
 │   └── rules.yaml              # 8 security & governance rules

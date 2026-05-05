@@ -12,13 +12,13 @@
 - Phase 8: CI/CD Pipeline
 - Phase 9: Templates and Documentation
 - Phase 10: Serverless Database Expansion (DynamoDB)
+- Phase 11: Drift Remediation
 
 ## Planned Phases
 
-1. Drift remediation
-2. Multi-user/team collaboration
-3. OPA integration
-4. Web UI dashboard
+1. Multi-user/team collaboration
+2. OPA integration
+3. Web UI dashboard
 
 ## Notes
 

@@ -1,9 +1,9 @@
 # PROGRESS.md — Smart AWS Infrastructure Provisioning System
 
 ## Current Status
-**Active Phase**: ✅ CORE PHASES COMPLETE
-**Overall Progress**: 10 / 14 Phases Complete
-**Last Updated**: 2026-05-06 — Core 10 phases complete; Phases 11-14 added as the future roadmap.
+**Active Phase**: ✅ PHASE 11 COMPLETE
+**Overall Progress**: 11 / 14 Phases Complete
+**Last Updated**: 2026-05-06 — Core 11 phases complete; Phases 12-14 remain as the future roadmap.
 
 ---
 
@@ -21,7 +21,7 @@
 | 8 | CI/CD Pipeline | ✅ Complete | 3 workflows: terraform, infracost, drift-detection |
 | 9 | Templates and Documentation | ✅ Complete | README.md, templates, final test suite green |
 | 10 | Serverless Database Expansion (DynamoDB) | ✅ Complete | DynamoDB module, wizard support, and tests added |
-| 11 | Drift Remediation | ⏳ Planned | Auto-fix drift after detection instead of only reporting it |
+| 11 | Drift Remediation | ✅ Complete | Automated remediation helper, workflow support, and tests added |
 | 12 | Multi-User Collaboration | ⏳ Planned | Shared workflows, approvals, and team-based usage |
 | 13 | OPA Integration | ⏳ Planned | Stronger policy enforcement beyond YAML rules |
 | 14 | Web UI Dashboard | ⏳ Planned | Visual interface for a friendlier user experience |
@@ -244,13 +244,18 @@
 
 ---
 
-## Phase 11 — Drift Remediation ⏳ PLANNED
+## Phase 11 — Drift Remediation ✅ COMPLETE
 **Goal**: Automatically correct infrastructure drift after it is detected.
 
-### Planned Tasks
-- [ ] Review drift-report output and map drifted resources to safe remediation actions
-- [ ] Add remediation workflow support after detection succeeds
-- [ ] Write tests for safe remediation and rollback behavior
+### Tasks
+- [x] Review drift-report output and map drifted resources to safe remediation actions
+- [x] Add remediation workflow support after detection succeeds
+- [x] Write tests for safe remediation and rollback behavior
+
+### Definition of Done for Phase 11 ✅
+- [x] Drift remediation helper created and testable
+- [x] Drift workflow now remediates when drift is detected
+- [x] Remediation report is generated and ignored by git
 
 ---
 

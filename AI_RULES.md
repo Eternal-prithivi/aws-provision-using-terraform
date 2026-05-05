@@ -164,11 +164,12 @@ These features are OUT OF SCOPE for the internship version:
 
 ## 📈 FUTURE ENHANCEMENTS ROADMAP
 
+Phase 11 (drift remediation) is now implemented.
+
 These are planned after the core internship scope, in this order:
-1. Drift remediation — move from detection-only to safe automated correction.
-2. Multi-user/team collaboration — support shared workflows and approvals.
-3. OPA integration — add stronger policy management with Open Policy Agent.
-4. Web UI dashboard — provide a visual interface for easier use and demos.
+1. Multi-user/team collaboration — support shared workflows and approvals.
+2. OPA integration — add stronger policy management with Open Policy Agent.
+3. Web UI dashboard — provide a visual interface for easier use and demos.
 
 Do not implement these. Do not promise these. Reference them only under "Future Enhancements."
 
