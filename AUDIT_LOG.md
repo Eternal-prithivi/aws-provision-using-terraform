@@ -1,4 +1,5 @@
-# AUDIT_LOG.md — Activity Log
+# AUDIT_LOG.md — Activity Log 
+
 
 > Append-only. Never delete entries. Most recent at the top.
 > Use AGENT_SESSION_TEMPLATE.md for the format.
