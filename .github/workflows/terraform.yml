@@ -31,22 +31,36 @@ jobs:
         with:
           terraform_version: "~1.5"
 
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      # --- AWS-dependent steps: only run when secrets are configured ---
       - name: Terraform Init
+        if: ${{ env.AWS_ACCESS_KEY_ID != '' }}
         run: terraform init
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
 
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
-
       - name: Terraform Validate
+        if: ${{ env.AWS_ACCESS_KEY_ID != '' }}
         run: terraform validate
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
 
       - name: Terraform Plan
+        if: ${{ env.AWS_ACCESS_KEY_ID != '' }}
         run: terraform plan -input=false
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
+
+      - name: Skip notice — AWS credentials not configured
+        if: ${{ env.AWS_ACCESS_KEY_ID == '' }}
+        run: echo "⚠️ Skipping Terraform init/validate/plan — AWS secrets not configured. Add AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to GitHub Secrets."
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
