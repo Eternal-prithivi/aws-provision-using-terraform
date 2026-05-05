@@ -3,7 +3,7 @@
 # Expected monthly cost: $0.00 (t2.micro within free tier for 12 months)
 # Use case: Small backend application running on EC2
 
-aws_region        = "us-east-1"
+aws_region        = "ap-south-1"
 
 # Feature flags — VPC + EC2 + IAM for backend app
 enable_vpc        = true

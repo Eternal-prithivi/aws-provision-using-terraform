@@ -3,7 +3,7 @@
 # Expected monthly cost: $0.00 (within free tier for 12 months)
 # Use case: HTML/CSS/JS static website hosted on S3
 
-aws_region        = "us-east-1"
+aws_region        = "ap-south-1"
 
 # Feature flags — only S3 enabled for static site
 enable_vpc        = false

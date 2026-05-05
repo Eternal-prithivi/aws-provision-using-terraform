@@ -13,7 +13,7 @@
 #   backend "s3" {
 #     bucket         = "terraform-state-REPLACE_WITH_YOUR_ACCOUNT_ID"
 #     key            = "terraform.tfstate"
-#     region         = "us-east-1"
+#     region         = "ap-south-1"
 #     dynamodb_table = "terraform-state-lock"
 #     encrypt        = true
 #   }

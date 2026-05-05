@@ -3,7 +3,7 @@
 # Used in tests to verify the policy engine correctly blocks insecure deployments.
 # DO NOT use this for real deployments.
 
-aws_region = "us-east-1"
+aws_region = "ap-south-1"
 
 enable_vpc        = true
 enable_ec2        = true
@@ -12,8 +12,8 @@ enable_iam        = true
 enable_cloudwatch = false
 
 vpc_cidr      = "10.0.0.0/16"
-instance_type = "m5.4xlarge" # triggers: expensive_ec2_instance (warning)
-ami_id        = "ami-0c02fb55956c7d316"
+instance_type = "m5.4xlarge"            # triggers: expensive_ec2_instance (warning)
+ami_id        = "ami-0f58b397bc5c1f2e8" # Amazon Linux 2 — ap-south-1 (Mumbai)
 bucket_name   = "my-public-bucket-danger"
 
 budget_limit = "1"
