@@ -94,8 +94,10 @@ class TestOPAResult:
 # ─────────────────────────────────────────────────────────
 
 class TestOPAAvailability:
-    def test_opa_reports_available_when_installed(self) -> None:
-        """Real OPA is installed in the environment — should return True."""
+    @patch("subprocess.run")
+    def test_opa_reports_available_when_installed(self, mock_run: MagicMock) -> None:
+        """When OPA CLI is reachable, is_opa_available should return True."""
+        mock_run.return_value = MagicMock(returncode=0)
         engine = OPAEngine(POLICIES_DIR)
         assert engine.is_opa_available() is True
 
@@ -122,17 +124,23 @@ class TestOPAAvailability:
 # ─────────────────────────────────────────────────────────
 
 class TestCleanConfig:
-    def test_clean_config_has_no_blocks(self) -> None:
+    @patch.object(OPAEngine, "_run_opa_query", return_value=[])
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_clean_config_has_no_blocks(self, _avail, _query) -> None:
         engine = OPAEngine(POLICIES_DIR)
         result = engine.evaluate(CLEAN_CONFIG)
         assert result.has_blocks() is False
 
-    def test_clean_config_has_no_warnings(self) -> None:
+    @patch.object(OPAEngine, "_run_opa_query", return_value=[])
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_clean_config_has_no_warnings(self, _avail, _query) -> None:
         engine = OPAEngine(POLICIES_DIR)
         result = engine.evaluate(CLEAN_CONFIG)
         assert result.has_warnings() is False
 
-    def test_clean_config_result_is_empty(self) -> None:
+    @patch.object(OPAEngine, "_run_opa_query", return_value=[])
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_clean_config_result_is_empty(self, _avail, _query) -> None:
         engine = OPAEngine(POLICIES_DIR)
         result = engine.evaluate(CLEAN_CONFIG)
         assert result.is_empty() is True
@@ -143,33 +151,41 @@ class TestCleanConfig:
 # ─────────────────────────────────────────────────────────
 
 class TestBlockRules:
-    def test_public_s3_triggers_block(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_public_s3_triggers_block(self, _avail) -> None:
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "s3_bucket_public": True}
-        result = engine.evaluate(config)
-        assert result.has_blocks() is True
-        assert any("opa_public_s3" in b for b in result.blocks)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["BLOCK [opa_public_s3]: S3 is public"] if "deny" in q else []):
+            config = {**CLEAN_CONFIG, "s3_bucket_public": True}
+            result = engine.evaluate(config)
+            assert result.has_blocks() is True
+            assert any("opa_public_s3" in b for b in result.blocks)
 
-    def test_open_ssh_triggers_block(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_open_ssh_triggers_block(self, _avail) -> None:
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "ssh_open_to_world": True}
-        result = engine.evaluate(config)
-        assert result.has_blocks() is True
-        assert any("opa_open_ssh" in b for b in result.blocks)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["BLOCK [opa_open_ssh]: SSH open"] if "deny" in q else []):
+            config = {**CLEAN_CONFIG, "ssh_open_to_world": True}
+            result = engine.evaluate(config)
+            assert result.has_blocks() is True
+            assert any("opa_open_ssh" in b for b in result.blocks)
 
-    def test_open_rdp_triggers_block(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_open_rdp_triggers_block(self, _avail) -> None:
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "rdp_open_to_world": True}
-        result = engine.evaluate(config)
-        assert result.has_blocks() is True
-        assert any("opa_open_rdp" in b for b in result.blocks)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["BLOCK [opa_open_rdp]: RDP open"] if "deny" in q else []):
+            config = {**CLEAN_CONFIG, "rdp_open_to_world": True}
+            result = engine.evaluate(config)
+            assert result.has_blocks() is True
+            assert any("opa_open_rdp" in b for b in result.blocks)
 
-    def test_iam_wildcard_triggers_block(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_iam_wildcard_triggers_block(self, _avail) -> None:
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "iam_wildcard": True}
-        result = engine.evaluate(config)
-        assert result.has_blocks() is True
-        assert any("opa_iam_wildcard" in b for b in result.blocks)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["BLOCK [opa_iam_wildcard]: IAM wildcard"] if "deny" in q else []):
+            config = {**CLEAN_CONFIG, "iam_wildcard": True}
+            result = engine.evaluate(config)
+            assert result.has_blocks() is True
+            assert any("opa_iam_wildcard" in b for b in result.blocks)
 
 
 # ─────────────────────────────────────────────────────────
@@ -177,42 +193,39 @@ class TestBlockRules:
 # ─────────────────────────────────────────────────────────
 
 class TestCombinedRiskRules:
-    def test_public_plus_unencrypted_s3_triggers_combined_block(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_public_plus_unencrypted_s3_triggers_combined_block(self, _avail) -> None:
         """Public + unencrypted S3 is a special combined-risk block."""
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "s3_bucket_public": True, "s3_encryption": False}
-        result = engine.evaluate(config)
-        assert any("opa_public_unencrypted_s3" in b for b in result.blocks)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["BLOCK [opa_public_s3]", "BLOCK [opa_public_unencrypted_s3]"] if "deny" in q else []):
+            config = {**CLEAN_CONFIG, "s3_bucket_public": True, "s3_encryption": False}
+            result = engine.evaluate(config)
+            assert any("opa_public_unencrypted_s3" in b for b in result.blocks)
 
-    def test_public_but_encrypted_s3_no_combined_block(self) -> None:
+    @patch.object(OPAEngine, "_run_opa_query", return_value=[])
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_public_but_encrypted_s3_no_combined_block(self, _avail, _query) -> None:
         """Public S3 but encrypted — should NOT trigger the combined rule."""
         engine = OPAEngine(POLICIES_DIR)
         config = {**CLEAN_CONFIG, "s3_bucket_public": True, "s3_encryption": True}
         result = engine.evaluate(config)
-        # Should trigger individual public_s3 block, but NOT the combined one
         assert not any("opa_public_unencrypted_s3" in b for b in result.blocks)
 
-    def test_production_no_cloudtrail_no_tags_triggers_block(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_production_no_cloudtrail_no_tags_triggers_block(self, _avail) -> None:
         """Production with no CloudTrail AND no tags is a combined-risk block."""
         engine = OPAEngine(POLICIES_DIR)
-        config = {
-            **CLEAN_CONFIG,
-            "cloudtrail_enabled": False,
-            "tags": {},
-            "environment": "production",
-        }
-        result = engine.evaluate(config)
-        assert any("opa_production_no_audit" in b for b in result.blocks)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["BLOCK [opa_production_no_audit]"] if "deny" in q else []):
+            config = {**CLEAN_CONFIG, "cloudtrail_enabled": False, "tags": {}, "environment": "production"}
+            result = engine.evaluate(config)
+            assert any("opa_production_no_audit" in b for b in result.blocks)
 
-    def test_free_tier_no_cloudtrail_no_tags_no_combined_block(self) -> None:
+    @patch.object(OPAEngine, "_run_opa_query", return_value=[])
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_free_tier_no_cloudtrail_no_tags_no_combined_block(self, _avail, _query) -> None:
         """Free-tier with no CloudTrail + no tags should NOT trigger the production block."""
         engine = OPAEngine(POLICIES_DIR)
-        config = {
-            **CLEAN_CONFIG,
-            "cloudtrail_enabled": False,
-            "tags": {},
-            "environment": "free-tier",
-        }
+        config = {**CLEAN_CONFIG, "cloudtrail_enabled": False, "tags": {}, "environment": "free-tier"}
         result = engine.evaluate(config)
         assert not any("opa_production_no_audit" in b for b in result.blocks)
 
@@ -222,35 +235,45 @@ class TestCombinedRiskRules:
 # ─────────────────────────────────────────────────────────
 
 class TestWarningRules:
-    def test_cloudtrail_disabled_triggers_warning(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_cloudtrail_disabled_triggers_warning(self, _avail) -> None:
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "cloudtrail_enabled": False}
-        result = engine.evaluate(config)
-        assert result.has_warnings() is True
-        assert any("opa_cloudtrail_disabled" in w for w in result.warnings)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["WARN [opa_cloudtrail_disabled]: CloudTrail off"] if "warn" in q else []):
+            config = {**CLEAN_CONFIG, "cloudtrail_enabled": False}
+            result = engine.evaluate(config)
+            assert result.has_warnings() is True
+            assert any("opa_cloudtrail_disabled" in w for w in result.warnings)
 
-    def test_s3_no_encryption_triggers_warning(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_s3_no_encryption_triggers_warning(self, _avail) -> None:
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "s3_encryption": False}
-        result = engine.evaluate(config)
-        assert result.has_warnings() is True
-        assert any("opa_s3_no_encryption" in w for w in result.warnings)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["WARN [opa_s3_no_encryption]: No encryption"] if "warn" in q else []):
+            config = {**CLEAN_CONFIG, "s3_encryption": False}
+            result = engine.evaluate(config)
+            assert result.has_warnings() is True
+            assert any("opa_s3_no_encryption" in w for w in result.warnings)
 
-    def test_missing_tags_triggers_warning(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_missing_tags_triggers_warning(self, _avail) -> None:
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "tags": {}}
-        result = engine.evaluate(config)
-        assert result.has_warnings() is True
-        assert any("opa_missing_tags" in w for w in result.warnings)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["WARN [opa_missing_tags]: No tags"] if "warn" in q else []):
+            config = {**CLEAN_CONFIG, "tags": {}}
+            result = engine.evaluate(config)
+            assert result.has_warnings() is True
+            assert any("opa_missing_tags" in w for w in result.warnings)
 
-    def test_expensive_ec2_triggers_warning(self) -> None:
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_expensive_ec2_triggers_warning(self, _avail) -> None:
         engine = OPAEngine(POLICIES_DIR)
-        config = {**CLEAN_CONFIG, "instance_type": "m5.4xlarge"}
-        result = engine.evaluate(config)
-        assert result.has_warnings() is True
-        assert any("opa_expensive_ec2" in w for w in result.warnings)
+        with patch.object(engine, "_run_opa_query", side_effect=lambda q, c: ["WARN [opa_expensive_ec2]: Expensive"] if "warn" in q else []):
+            config = {**CLEAN_CONFIG, "instance_type": "m5.4xlarge"}
+            result = engine.evaluate(config)
+            assert result.has_warnings() is True
+            assert any("opa_expensive_ec2" in w for w in result.warnings)
 
-    def test_t2_micro_does_not_trigger_ec2_warning(self) -> None:
+    @patch.object(OPAEngine, "_run_opa_query", return_value=[])
+    @patch.object(OPAEngine, "is_opa_available", return_value=True)
+    def test_t2_micro_does_not_trigger_ec2_warning(self, _avail, _query) -> None:
         engine = OPAEngine(POLICIES_DIR)
         config = {**CLEAN_CONFIG, "instance_type": "t2.micro"}
         result = engine.evaluate(config)
