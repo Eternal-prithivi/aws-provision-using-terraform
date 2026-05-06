@@ -49,6 +49,7 @@ infracost-diff.json
 # Drift Detection
 # =============================================
 drift-report.txt
+drift-remediation-report.txt
 
 # =============================================
 # macOS

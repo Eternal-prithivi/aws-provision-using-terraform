@@ -44,6 +44,7 @@ class TestWizardConfig:
         assert config.enable_s3 is False
         assert config.enable_iam is False
         assert config.enable_cloudwatch is False
+        assert config.enable_dynamodb is False
 
     def test_default_instance_type_is_t2_micro(self) -> None:
         config = WizardConfig()
@@ -83,6 +84,7 @@ class TestToTfvars:
         assert "enable_s3" in output
         assert "enable_iam" in output
         assert "enable_cloudwatch" in output
+        assert "enable_dynamodb" in output
 
     def test_tfvars_contains_tags_block(self) -> None:
         config = WizardConfig(tags={"Owner": "test"})
@@ -174,6 +176,9 @@ class TestTemplates:
             assert "services" in tpl, f"Template {key} missing 'services'"
             assert "environment" in tpl, f"Template {key} missing 'environment'"
 
+    def test_serverless_db_template_exists(self) -> None:
+        assert "serverless-db" in TEMPLATES
+
     def test_all_templates_are_free_tier(self) -> None:
         for key, tpl in TEMPLATES.items():
             assert tpl["environment"] == "free-tier", f"Template {key} is not free-tier"
@@ -257,8 +262,10 @@ class TestDisplayWelcome:
 class TestStepSelectTemplate:
     @patch("builtins.input", return_value="3")  # Custom option (last)
     def test_custom_returns_none(self, mock_input: MagicMock) -> None:
-        result = step_select_template()
-        assert result is None
+        # Custom is always the last choice (compute dynamically)
+        with patch("builtins.input", side_effect=lambda _=None: str(len(TEMPLATES) + 1)):
+            result = step_select_template()
+            assert result is None
 
     @patch("builtins.input", return_value="1")  # First template: static-site
     def test_static_site_returns_key(self, mock_input: MagicMock) -> None:
@@ -272,7 +279,7 @@ class TestStepSelectTemplate:
 
 
 class TestStepSelectServices:
-    @patch("builtins.input", side_effect=["y", "y", "n", "n", "n"])
+    @patch("builtins.input", side_effect=["y", "y", "n", "n", "n", "n"])
     def test_enables_vpc_and_ec2(self, mock_input: MagicMock) -> None:
         config = WizardConfig()
         step_select_services(config)
@@ -281,8 +288,8 @@ class TestStepSelectServices:
         assert config.enable_s3 is False
 
     @patch("builtins.input", side_effect=[
-        "n", "n", "n", "n", "n",  # All no → retry
-        "n", "y", "n", "n", "n",  # Second round: enable EC2
+        "n", "n", "n", "n", "n", "n",  # All no → retry
+        "n", "y", "n", "n", "n", "n",  # Second round: enable EC2
     ])
     def test_retries_when_no_services_selected(self, mock_input: MagicMock) -> None:
         config = WizardConfig()
@@ -493,14 +500,17 @@ class TestStepDestroyPrompt:
 class TestMainFlow:
     @patch("wizard.step_confirm_and_deploy", return_value=False)
     @patch("wizard.step_run_infracost", return_value=True)
+    @patch("wizard.step_run_opa_engine")
     @patch("wizard.step_run_policy_engine")
     @patch("wizard.step_generate_tfvars", return_value="/tmp/terraform.tfvars")
     @patch("wizard.step_configure_services")
     @patch("wizard.step_select_template", return_value="static-site")
     @patch("wizard.display_welcome")
     def test_main_template_flow(self, mock_welcome, mock_template, mock_config,
-                                 mock_tfvars, mock_policy, mock_infra, mock_deploy) -> None:
+                                 mock_tfvars, mock_policy, mock_opa,
+                                 mock_infra, mock_deploy) -> None:
         mock_policy.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
+        mock_opa.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
         main()
         mock_welcome.assert_called_once()
         mock_template.assert_called_once()
@@ -508,6 +518,7 @@ class TestMainFlow:
 
     @patch("wizard.step_confirm_and_deploy", return_value=False)
     @patch("wizard.step_run_infracost", return_value=True)
+    @patch("wizard.step_run_opa_engine")
     @patch("wizard.step_run_policy_engine")
     @patch("wizard.step_generate_tfvars", return_value="/tmp/terraform.tfvars")
     @patch("wizard.step_configure_services")
@@ -517,8 +528,9 @@ class TestMainFlow:
     @patch("wizard.display_welcome")
     def test_main_custom_flow(self, mock_welcome, mock_template, mock_services,
                                mock_env, mock_config, mock_tfvars, mock_policy,
-                               mock_infra, mock_deploy) -> None:
+                               mock_opa, mock_infra, mock_deploy) -> None:
         mock_policy.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
+        mock_opa.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
         main()
         mock_services.assert_called_once()
         mock_env.assert_called_once()
@@ -558,6 +570,7 @@ class TestMainFlow:
     @patch("wizard.step_destroy_prompt")
     @patch("wizard.step_confirm_and_deploy", return_value=True)
     @patch("wizard.step_run_infracost", return_value=True)
+    @patch("wizard.step_run_opa_engine")
     @patch("wizard.step_run_policy_engine")
     @patch("wizard.step_generate_tfvars", return_value="/tmp/terraform.tfvars")
     @patch("wizard.step_configure_services")
@@ -565,9 +578,10 @@ class TestMainFlow:
     @patch("wizard.display_welcome")
     def test_main_successful_deploy_shows_destroy_prompt(
         self, mock_welcome, mock_template, mock_config, mock_tfvars,
-        mock_policy, mock_infra, mock_deploy, mock_destroy_prompt
+        mock_policy, mock_opa, mock_infra, mock_deploy, mock_destroy_prompt
     ) -> None:
         mock_policy.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
+        mock_opa.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
         main()
         mock_destroy_prompt.assert_called_once()
 
@@ -589,6 +603,7 @@ class TestEdgeCases:
         assert "enable_s3         = true" in output
         assert "enable_iam        = true" in output
         assert "enable_cloudwatch = true" in output
+        assert "enable_dynamodb  = false" in output or "enable_dynamodb = false" in output
 
     def test_config_to_tfvars_never_contains_credentials(self) -> None:
         """terraform.tfvars must never contain AWS credentials."""

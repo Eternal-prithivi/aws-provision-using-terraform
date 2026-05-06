@@ -8,13 +8,33 @@
 
 ## Features
 
-- **Interactive CLI Wizard** — Deploy infrastructure by answering simple questions
-- **Policy Engine** — 8 security & governance rules automatically checked before deployment
-- **Cost Estimation** — Infracost integration shows monthly costs before you deploy
-- **Drift Detection** — Daily GitHub Actions job detects unauthorized infrastructure changes
-- **Free-Tier Safe** — Default configuration stays within AWS Free Tier ($0/month)
-- **Modular Architecture** — 6 independent Terraform modules (VPC, EC2, S3, IAM, CloudWatch, Billing)
-- **98% Test Coverage** — 106 tests covering policy engine, wizard, and deployment flow
+- **Modern Web UI Dashboard** — Next.js 14 frontend with a premium, glassmorphic design and Framer Motion animations.
+- **FastAPI Backend** — Robust Python backend handling 19 REST endpoints, SSE streaming, and async background tasks.
+- **Interactive Deploy Wizard** — Deploy infrastructure step-by-step with real-time Terraform plan/apply streaming.
+- **Dual Policy Engine (YAML + OPA)** — 8 built-in security & governance rules plus Open Policy Agent (Rego) integration. Custom policies can be added via the UI.
+- **Team Management & RBAC** — Role-based access control (Admin, DevOps, Developer, Viewer) managing permissions dynamically.
+- **Approval Workflows & Slack Integration** — Deployment requests are routed to an approval queue with real-time Slack webhook notifications.
+- **Cost Estimation** — Infracost integration shows monthly costs before you deploy.
+- **Drift Detection & Remediation** — Daily GitHub Actions job detects unauthorized changes. "Dry Run" and "Apply" fixes can be triggered directly from the Web UI.
+- **Free-Tier Safe** — Default configuration stays within AWS Free Tier ($0/month).
+- **Modular Architecture** — 7 independent Terraform modules (VPC, EC2, S3, IAM, CloudWatch, Billing, DynamoDB).
+- **221 Tests** — Extensive coverage for policy engines, API endpoints, team collaboration, and deployment flows.
+
+## Documentation
+
+Project-facing documentation lives in the [`docs/`](docs) folder:
+
+- [Documentation Hub](docs/README.md)
+- [Product Overview](docs/product-overview.md)
+- [Architecture](docs/architecture.md)
+- [Getting Started](docs/getting-started.md)
+- [Operations Guide](docs/operations.md)
+- [Roadmap](docs/roadmap.md)
+
+## Roadmap
+
+**Project Complete: Phases 1-15 successfully delivered.**
+All core CLI features, multi-user collaboration, OPA integration, and the full-stack Web UI Dashboard (FastAPI + Next.js) have been implemented.
 
 ---
 
@@ -51,25 +71,34 @@ aws configure
 terraform init
 ```
 
-### 4. Run the Wizard
+### 4. Run the Web UI Dashboard (Recommended)
+
+The Web UI provides the most complete experience, including team management and policy authoring.
+
+**Terminal 1 (Backend):**
+```bash
+cd web-ui/api
+uvicorn server:app --reload --port 8000
+```
+
+**Terminal 2 (Frontend):**
+```bash
+cd web-ui/frontend
+npm install
+npm run dev
+```
+Then navigate to `http://localhost:3000` in your browser. Use your GitHub token to log in.
+
+### 5. Run the CLI Wizard (Alternative)
 
 ```bash
 python cli-wizard/wizard.py
 ```
 
-The wizard will:
-1. Ask you to select a template or custom configuration
-2. Configure your selected AWS services
-3. Run the **Policy Engine** — blocks insecure configurations
-4. Run **Infracost** — shows estimated monthly cost
-5. Deploy with `terraform apply` (after your confirmation)
-
-### 5. Destroy Resources
+### 6. Destroy Resources
 
 ```bash
-python cli-wizard/wizard.py --destroy
-# or
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 ---
@@ -82,34 +111,31 @@ terraform destroy
 ├── outputs.tf                  # Deployment outputs
 ├── backend.tf                  # S3 remote state backend
 │
-├── modules/
-│   ├── vpc/                    # VPC with public/private subnets
-│   ├── ec2/                    # EC2 instance (default: t2.micro)
-│   ├── s3/                     # S3 bucket (private + AES256 encryption)
-│   ├── iam/                    # IAM role (least privilege)
-│   ├── cloudwatch/             # CloudWatch alarms + SNS
-│   └── billing/                # AWS Budget ($1 alert)
+├── web-ui/                     # Next.js + FastAPI Dashboard
+│   ├── api/                    # Python FastAPI backend (server.py)
+│   └── frontend/               # Next.js React frontend application
 │
-├── policy-engine/
-│   ├── engine.py               # PolicyEngine class (load, evaluate, report)
-│   └── rules.yaml              # 8 security & governance rules
+├── modules/                    # 7 AWS Terraform modules
+│   ├── vpc/, ec2/, s3/, iam/, cloudwatch/, billing/, dynamodb/
 │
-├── cli-wizard/
-│   └── wizard.py               # Interactive CLI wizard
+├── policy-engine/              # Python evaluation engine
+│   ├── engine.py               # PolicyEngine class
+│   └── rules.yaml              # Extensible YAML security rules
 │
-├── drift-detection/
-│   └── detect.sh               # Infrastructure drift detector
+├── opa-policies/               # Open Policy Agent configuration
+│   └── aws_security.rego       # Rego-based security policies
 │
-├── templates/
-│   ├── static-site/            # S3-only static website template
-│   └── backend-app/            # VPC + EC2 + IAM backend template
+├── team-management/            # RBAC and workflow engine
+│   └── teams.yaml              # Team permissions & approval settings
 │
-├── tests/
-│   ├── unit/                   # Unit tests (policy engine, wizard)
-│   ├── integration/            # Integration tests (terraform, infracost)
-│   └── fixtures/               # Test data files
+├── drift-detection/            # Automated drift detection
+│   ├── detect.sh               # Bash scanner
+│   └── remediation.py          # Python auto-remediator
 │
-└── .github/workflows/
+├── tests/                      # 221 passing unit & integration tests
+│   ├── unit/, integration/, fixtures/
+│
+└── .github/workflows/          # CI/CD Pipelines
     ├── terraform.yml           # CI: test → fmt → init → validate → plan
     ├── infracost.yml           # PR cost diff comments
     └── drift-detection.yml     # Daily drift check (cron)
@@ -171,14 +197,11 @@ pytest tests/ -v
 # Run with coverage
 pytest tests/ --cov=. --cov-report=term-missing --cov-fail-under=80
 
-# Run only unit tests
-pytest tests/unit/ -v
-
-# Run only integration tests
-pytest tests/integration/ -v
+# Run API-specific tests
+pytest tests/unit/test_api.py -v
 ```
 
-**Current: 106 tests, 98% coverage**
+**Current: 221 tests, 99% coverage**
 
 ---
 

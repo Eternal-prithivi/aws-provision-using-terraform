@@ -7,7 +7,7 @@ on:
 
 jobs:
   drift-detection:
-    name: Detect Infrastructure Drift
+    name: Detect and Remediate Infrastructure Drift
     runs-on: ubuntu-latest
 
     steps:
@@ -27,16 +27,91 @@ jobs:
           AWS_DEFAULT_REGION: ap-south-1
 
       - name: Run Drift Detection
+        id: detect
+        continue-on-error: true
         run: bash drift-detection/detect.sh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ap-south-1
 
-      - name: Upload drift report if drift detected
-        if: failure()
+      - name: Remediate Drift
+        if: steps.detect.outcome == 'failure'
+        continue-on-error: true
+        run: python drift-detection/remediation.py --report-file drift-report.txt --check-only
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-south-1
+
+      - name: Notify Slack of Drift Detection
+        if: steps.detect.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          curl -X POST '${{ secrets.SLACK_WEBHOOK_URL }}' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚨 Infrastructure Drift Detected",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\naws-provision-using-terraform"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Region:*\nap-south-1"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Workflow:*\nDaily Drift Detection"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Time:*\n${{ job.created_at }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Status:* Check-only mode (no changes applied)\n\n*Action Required:* Review the drift report and artifacts to decide if remediation is needed."
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View GitHub Actions",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                      "style": "primary"
+                    }
+                  ]
+                }
+              ]
+            }'
+
+      - name: Upload drift artifacts
+        if: steps.detect.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: drift-report
-          path: drift-report.txt
+          name: drift-reports
+          path: |
+            drift-report.txt
+            drift-remediation-report.txt
           retention-days: 7

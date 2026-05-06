@@ -21,6 +21,15 @@ When a new chat or agent session starts, execute in this exact order:
 
 **Do not skip steps. Do not write code before completing all 7 steps.**
 
+## First-run Admin Onboarding (wizard)
+
+When the CLI wizard is run for the first time and no `admin` user exists in
+`team-management/teams.yaml`, the wizard will prompt to create the initial
+admin account (full name, email, GitHub username). The wizard makes a
+timestamped backup, writes the YAML, and can optionally commit the change to
+Git. Admins gain access to an in-wizard Team Management menu to add/edit/remove
+members. See `docs/team-management.md` for details.
+
 ---
 
 ## 📋 TASK EXECUTION PROTOCOL
@@ -129,15 +138,20 @@ terraform-project/
 │   ├── s3/                         ← S3, private + encrypted enforced
 │   ├── iam/                        ← IAM, least privilege defaults
 │   ├── cloudwatch/                 ← CloudWatch monitoring
-│   └── billing/                    ← AWS Budgets billing alerts
+│   ├── billing/                    ← AWS Budgets billing alerts
+│   └── dynamodb/                   ← DynamoDB NoSQL database (Always Free)
 ├── templates/
 │   ├── static-site/                ← S3-based static website template
 │   └── backend-app/                ← EC2-based backend template
 ├── policy-engine/
 │   ├── engine.py                   ← reads rules, evaluates config
 │   └── rules.yaml                  ← 8 rules: security + cost + governance
+├── opa-policies/
+│   ├── aws_security.rego           ← Rego policy file (10 rules incl. combined-risk)
+│   └── opa_engine.py               ← Python wrapper, OPAResult + OPAEngine classes
 ├── cli-wizard/
-│   └── wizard.py                   ← interactive CLI entry point
+│   ├── wizard.py                   ← interactive CLI entry point
+│   └── auth_gate.py                ← GitHub token auth + role permission gate
 ├── drift-detection/
 │   └── detect.sh                   ← terraform refresh + plan -detailed-exitcode
 ├── tests/
@@ -149,6 +163,17 @@ terraform-project/
     ├── terraform.yml               ← main CI/CD: test → validate → plan
     ├── infracost.yml               ← cost diff on PRs
     └── drift-detection.yml         ← daily cron job
+
+web-ui/
+├── api/
+│   ├── server.py                   ← FastAPI backend (18 REST endpoints)
+│   ├── requirements.txt            ← fastapi, uvicorn, pydantic
+│   └── __init__.py
+└── frontend/                       ← Next.js 16 + Tailwind CSS 4
+    ├── src/app/                    ← 6 pages (dashboard, deploy, policies, audit, team, drift)
+    ├── src/components/layout/      ← Sidebar, TopBar
+    ├── src/lib/api.ts              ← typed API client
+    └── package.json
 ```
 
 ---
@@ -180,4 +205,4 @@ A task is only done when ALL of the following are true:
 
 ---
 
-*Last updated: Project initialization | Phase: 1 — Foundation Setup*
+*Last updated: 2026-05-06 | Phase 15 in progress*

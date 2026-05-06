@@ -66,3 +66,12 @@ module "billing" {
   budget_limit = var.budget_limit
   budget_email = var.budget_email
 }
+
+# --- DynamoDB Module ---
+module "dynamodb" {
+  source          = "./modules/dynamodb"
+  enable_dynamodb = var.enable_dynamodb
+  table_name      = var.dynamodb_table_name
+  hash_key        = var.dynamodb_hash_key
+  tags            = var.tags
+}

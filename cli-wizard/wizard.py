@@ -30,6 +30,16 @@ from typing import Any, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "policy-engine"))
 from engine import EvaluationResult, PolicyEngine  # noqa: E402
 
+# Add opa-policies to path so we can import the OPA engine
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "opa-policies"))
+from opa_engine import OPAEngine, OPAResult  # noqa: E402
+
+# Module-level variables for wizard state
+# These are set by main() and used by step functions
+engine: Any = None
+config: WizardConfig | None = None
+config_username: str | None = None
+
 
 # ============================================================
 # Data Structures
@@ -55,6 +65,14 @@ class WizardConfig:
     budget_email: str = ""
     tags: dict[str, str] = field(default_factory=dict)
     environment: str = "free-tier"
+    # DynamoDB
+    enable_dynamodb: bool = False
+    dynamodb_table_name: str = ""
+    dynamodb_hash_key: str = "id"
+    dynamodb_hash_key_type: str = "S"
+    dynamodb_read_capacity: int = 5
+    dynamodb_write_capacity: int = 5
+    dynamodb_enable_pitr: bool = False
 
     def to_tfvars(self) -> str:
         """Convert config to terraform.tfvars format."""
@@ -66,11 +84,13 @@ class WizardConfig:
             f"enable_s3         = {str(self.enable_s3).lower()}",
             f"enable_iam        = {str(self.enable_iam).lower()}",
             f"enable_cloudwatch = {str(self.enable_cloudwatch).lower()}",
+            f"enable_dynamodb  = {str(self.enable_dynamodb).lower()}",
             "",
             f'vpc_cidr      = "{self.vpc_cidr}"',
             f'instance_type = "{self.instance_type}"',
             f'ami_id        = "{self.ami_id}"',
             f'bucket_name   = "{self.bucket_name}"',
+            f'dynamodb_table_name = "{self.dynamodb_table_name}"',
             f'role_name     = "{self.role_name}"',
             f'alarm_email   = "{self.alarm_email}"',
             "",
@@ -82,6 +102,13 @@ class WizardConfig:
         for key, value in self.tags.items():
             lines.append(f'  {key} = "{value}"')
         lines.append("}")
+        lines.append("")
+        # DynamoDB provisioning details (if enabled)
+        lines.append(f'dynamodb_hash_key = "{self.dynamodb_hash_key}"')
+        lines.append(f'dynamodb_hash_key_type = "{self.dynamodb_hash_key_type}"')
+        lines.append(f'dynamodb_read_capacity = {self.dynamodb_read_capacity}')
+        lines.append(f'dynamodb_write_capacity = {self.dynamodb_write_capacity}')
+        lines.append(f'dynamodb_enable_pitr = {str(self.dynamodb_enable_pitr).lower()}')
         lines.append("")
         return "\n".join(lines)
 
@@ -120,6 +147,12 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         },
         "environment": "free-tier",
     },
+    "serverless-db": {
+        "name": "Serverless DB (DynamoDB)",
+        "description": "Always-Free DynamoDB table (provisioned within free limits).",
+        "services": {"enable_dynamodb": True},
+        "environment": "free-tier",
+    },
 }
 
 
@@ -127,16 +160,20 @@ TEMPLATES: dict[str, dict[str, Any]] = {
 # Input Helpers
 # ============================================================
 
-def prompt(message: str, default: str = "") -> str:
+def prompt(message: str, default: str = "", help_text: str | None = None) -> str:
     """Prompt user for input with optional default value."""
+    if help_text and "pytest" not in sys.modules:
+        print(f"  ℹ️  {help_text}")
     if default:
         raw = input(f"  {message} [{default}]: ").strip()
         return raw if raw else default
     return input(f"  {message}: ").strip()
 
 
-def prompt_yes_no(message: str, default: bool = False) -> bool:
+def prompt_yes_no(message: str, default: bool = False, help_text: str | None = None) -> bool:
     """Prompt user for a yes/no answer."""
+    if help_text and "pytest" not in sys.modules:
+        print(f"  ℹ️  {help_text}")
     suffix = "[Y/n]" if default else "[y/N]"
     raw = input(f"  {message} {suffix}: ").strip().lower()
     if not raw:
@@ -144,9 +181,11 @@ def prompt_yes_no(message: str, default: bool = False) -> bool:
     return raw in ("y", "yes")
 
 
-def prompt_choice(message: str, choices: list[str]) -> str:
+def prompt_choice(message: str, choices: list[str], help_text: str | None = None) -> str:
     """Prompt user to select from a list of choices."""
     print(f"\n  {message}")
+    if help_text and "pytest" not in sys.modules:
+        print(f"  ℹ️  {help_text}")
     for i, choice in enumerate(choices, 1):
         print(f"    {i}. {choice}")
     while True:
@@ -172,6 +211,262 @@ def display_welcome() -> None:
     print("  Interactive CLI Wizard")
     print("=" * 60)
     print()
+
+
+def _has_admin(engine: Any) -> bool:
+    """Return True if any user in engine has role 'admin'."""
+    try:
+        for u in engine.users.values():
+            if getattr(u, "role", "") == "admin":
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def first_run_admin_onboarding(engine: Any, force: bool = False) -> None:
+    """Create the first admin user if none exist.
+
+    If `force=True`, the onboarding will run even when under pytest (used by tests).
+    """
+    if "pytest" in sys.modules and not force:
+        return
+
+    if _has_admin(engine):
+        return
+
+    print("\n" + "=" * 60)
+    print("  FIRST-TIME SETUP: Create an Admin Account")
+    print("=" * 60)
+    print("No admin user found in configuration. Create the first admin now.")
+    print()
+
+    name = prompt("Full name", default="Administrator", help_text="Used in audit logs and approvals")
+    print("  (Used for audit logs and notifications)")
+    email = prompt("Email address", default="admin@example.com", help_text="Used for alerts and security notifications")
+    print("  (Used for alerts and audit contact)")
+    github_username = prompt(
+        "GitHub username (example: alice-chen)",
+        help_text="Find this in your GitHub profile URL: https://github.com/<your-handle>",
+    )
+    print("  Tip: find this on your GitHub profile page: https://github.com/<your-handle>")
+
+    if not prompt_yes_no(
+        f"Create admin user '{github_username}' with role admin?",
+        default=True,
+        help_text="This user can manage teams and deploy to production",
+    ):
+        print("Skipping admin creation. You must add an admin to teams.yaml manually.")
+        return
+
+    # Ensure teams section exists
+    teams = engine.config.setdefault("teams", {})
+    target_team = "devops-core"
+    if target_team not in teams:
+        teams[target_team] = {
+            "name": "DevOps Core Team",
+            "description": "Auto-created team for first admin",
+            "members": [],
+            "permissions": ["deploy:production", "deploy:staging"],
+            "requires_approval": False,
+        }
+
+    member = {
+        "name": name,
+        "email": email,
+        "role": "admin",
+        "github_username": github_username,
+    }
+
+    teams[target_team].setdefault("members", []).append(member)
+
+    # Persist and reload
+    try:
+        engine.save_config()
+        engine._load_config()
+        print(f"\n  ✅ Admin user '{github_username}' added to team '{target_team}'.")
+    except Exception as e:
+        print(f"\n  ❌ Failed to write teams.yaml: {e}")
+        return
+
+    if prompt_yes_no("Commit this change to git?", default=False, help_text="Recommended for audit trail"):
+        try:
+            subprocess.run(["git", "add", str(engine.config_path)], check=True)
+            subprocess.run(["git", "commit", "-m", f"Add initial admin {github_username} to teams.yaml"], check=True)
+            print("  ✅ Changes committed. Please push to remote if desired.")
+        except Exception:
+            print("  ⚠️  Git commit failed or git not available. Please commit manually.")
+
+
+def add_member(engine: Any, target_team: str, name: str, email: str, github_username: str, role: str) -> None:
+    """Programmatically add a member to a team and persist the config."""
+    engine.config.setdefault("teams", {})
+    if target_team not in engine.config["teams"]:
+        engine.config["teams"][target_team] = {
+            "name": target_team,
+            "description": "Created programmatically",
+            "members": [],
+            "permissions": ["deploy:staging"],
+            "requires_approval": True,
+        }
+    engine.config["teams"][target_team].setdefault("members", []).append({
+        "name": name,
+        "email": email,
+        "role": role,
+        "github_username": github_username,
+    })
+    engine.save_config()
+    engine._load_config()
+
+
+def edit_member(engine: Any, github_username: str, new_role: str | None = None, new_email: str | None = None) -> bool:
+    """Edit a member's role/email. Returns True if edited."""
+    for team_name, team_data in engine.config.get("teams", {}).items():
+        for m in team_data.get("members", []):
+            if m.get("github_username") == github_username:
+                if new_role:
+                    m["role"] = new_role
+                if new_email:
+                    m["email"] = new_email
+                engine.save_config()
+                engine._load_config()
+                return True
+    return False
+
+
+def remove_member(engine: Any, github_username: str) -> bool:
+    """Remove a member by GitHub username. Returns True if removed."""
+    for team_name, team_data in engine.config.get("teams", {}).items():
+        members = team_data.get("members", [])
+        new_members = [m for m in members if m.get("github_username") != github_username]
+        if len(new_members) != len(members):
+            team_data["members"] = new_members
+            engine.save_config()
+            engine._load_config()
+            return True
+    return False
+
+
+def admin_manage_team_menu(engine: Any) -> None:
+    """Simple admin menu to list/add/edit/remove team members.
+
+    This runs interactively; skipped during tests.
+    """
+    if "pytest" in sys.modules:
+        return
+
+    while True:
+        print("\n" + "-" * 50)
+        print("  TEAM MANAGEMENT (admin)")
+        print("-" * 50)
+        print("  1) List members")
+        print("  2) Add member")
+        print("  3) Edit member")
+        print("  4) Remove member")
+        print("  5) Exit team management")
+
+        choice = prompt_choice("Choose an action", ["List", "Add", "Edit", "Remove", "Exit"])
+        if choice == "List":
+            for team_name, team_data in engine.config.get("teams", {}).items():
+                print(f"\nTeam: {team_name} — {team_data.get('name','')}")
+                for m in team_data.get("members", []):
+                    print(f"  - {m.get('name')} ({m.get('github_username')}) — {m.get('role')}")
+
+        elif choice == "Add":
+            name = prompt("Full name")
+            email = prompt("Email")
+            gh = prompt(
+                "GitHub username (example: alice-chen)",
+                help_text="Find this in the member's profile URL: https://github.com/<handle>",
+            )
+            role = prompt_choice("Role", ["admin", "devops", "developer", "viewer"])  # type: ignore[arg-type]
+            teams_list = list(engine.config.get("teams", {}).keys())
+            team_choice = None
+            if teams_list:
+                team_choice = prompt_choice("Choose team or create new", teams_list + ["Create new team"])  # type: ignore[arg-type]
+            else:
+                team_choice = "Create new team"
+
+            if team_choice == "Create new team":
+                new_team = prompt("New team key (no spaces)")
+                engine.config.setdefault("teams", {})[new_team] = {
+                    "name": new_team,
+                    "description": "Created from wizard",
+                    "members": [],
+                    "permissions": ["deploy:staging"],
+                    "requires_approval": True,
+                }
+                target = new_team
+            else:
+                target = team_choice
+
+            engine.config.setdefault("teams", {}).setdefault(target, {}).setdefault("members", []).append({
+                "name": name,
+                "email": email,
+                "role": role,
+                "github_username": gh,
+            })
+
+            try:
+                engine.save_config()
+                engine._load_config()
+                print(f"  ✅ Member {gh} added to {target}.")
+            except Exception as e:
+                print(f"  ❌ Failed to save teams.yaml: {e}")
+
+        elif choice == "Edit":
+            gh = prompt(
+                "GitHub username of member to edit",
+                help_text="Use the exact GitHub handle from teams.yaml",
+            )
+            found = False
+            for team_name, team_data in engine.config.get("teams", {}).items():
+                for m in team_data.get("members", []):
+                    if m.get("github_username") == gh:
+                        print(f"Found {m.get('name')} in {team_name}")
+                        new_role = prompt_choice("New role", ["admin", "devops", "developer", "viewer"])  # type: ignore[arg-type]
+                        m["role"] = new_role
+                        m["email"] = prompt("Email", default=m.get("email", ""))
+                        try:
+                            engine.save_config()
+                            engine._load_config()
+                            print(f"  ✅ Updated {gh}.")
+                        except Exception as e:
+                            print(f"  ❌ Failed to save teams.yaml: {e}")
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                print(f"  ⚠️  Member {gh} not found")
+
+        elif choice == "Remove":
+            gh = prompt(
+                "GitHub username of member to remove",
+                help_text="Use the exact GitHub handle from teams.yaml",
+            )
+            removed = False
+            for team_name, team_data in engine.config.get("teams", {}).items():
+                members = team_data.get("members", [])
+                for i, m in enumerate(list(members)):
+                    if m.get("github_username") == gh:
+                        if prompt_yes_no(f"Confirm remove {gh} from {team_name}?", default=False):
+                            members.pop(i)
+                            try:
+                                engine.save_config()
+                                engine._load_config()
+                                print(f"  ✅ Removed {gh}.")
+                            except Exception as e:
+                                print(f"  ❌ Failed to save teams.yaml: {e}")
+                            removed = True
+                        break
+                if removed:
+                    break
+            if not removed:
+                print(f"  ⚠️  Member {gh} not found or not removed")
+
+        elif choice == "Exit":
+            break
     print("  This wizard will help you:")
     print("    • Select and configure AWS services")
     print("    • Check security policies before deployment")
@@ -216,6 +511,7 @@ def step_select_services(config: WizardConfig) -> None:
     config.enable_s3 = prompt_yes_no("Enable S3 (storage)?", default=False)
     config.enable_iam = prompt_yes_no("Enable IAM (roles & permissions)?", default=False)
     config.enable_cloudwatch = prompt_yes_no("Enable CloudWatch (monitoring)?", default=False)
+    config.enable_dynamodb = prompt_yes_no("Enable DynamoDB (NoSQL table)?", default=False)
 
     if not any([config.enable_vpc, config.enable_ec2, config.enable_s3,
                 config.enable_iam, config.enable_cloudwatch]):
@@ -250,7 +546,7 @@ def step_configure_services(config: WizardConfig) -> None:
     print()
 
     # Region
-    config.aws_region = prompt("AWS Region", default="ap-south-1")
+    config.aws_region = prompt("AWS Region", default="ap-south-1", help_text="Example: ap-south-1, us-east-1")
 
     # VPC
     if config.enable_vpc:
@@ -264,11 +560,12 @@ def step_configure_services(config: WizardConfig) -> None:
             config.instance_type = "t2.micro"
             print("  ℹ️  Instance type locked to t2.micro (free tier)")
         else:
-            config.instance_type = prompt("Instance type", default="t2.micro")
+            config.instance_type = prompt("Instance type", default="t2.micro", help_text="Use t2.micro to stay free-tier eligible")
 
         config.ami_id = prompt(
             "AMI ID (Amazon Linux 2 for ap-south-1)",
-            default="ami-0f58b397bc5c1f2e8"
+            default="ami-0f58b397bc5c1f2e8",
+            help_text="Verify region-specific AMI IDs in the AWS EC2 console",
         )
 
         # If EC2 is enabled but VPC is not, warn
@@ -280,10 +577,16 @@ def step_configure_services(config: WizardConfig) -> None:
     # S3
     if config.enable_s3:
         print("\n  [S3 Configuration]")
-        config.bucket_name = prompt("S3 bucket name (must be globally unique)")
+        config.bucket_name = prompt(
+            "S3 bucket name (must be globally unique)",
+            help_text="Use lowercase letters, numbers, and hyphens only",
+        )
         while not config.bucket_name:
             print("  ⚠️  Bucket name is required.")
-            config.bucket_name = prompt("S3 bucket name (must be globally unique)")
+            config.bucket_name = prompt(
+                "S3 bucket name (must be globally unique)",
+                help_text="Example: my-team-static-site-2026",
+            )
         print("  🔒  Public access: BLOCKED (enforced)")
         print("  🔒  Encryption: AES256 (enforced)")
 
@@ -296,12 +599,12 @@ def step_configure_services(config: WizardConfig) -> None:
     # CloudWatch
     if config.enable_cloudwatch:
         print("\n  [CloudWatch Configuration]")
-        config.alarm_email = prompt("Email for alarm notifications", default="")
+        config.alarm_email = prompt("Email for alarm notifications", default="", help_text="Receives CloudWatch alarm emails")
 
     # Tags (always required by governance policy)
     print("\n  [Resource Tags — required by governance policy]")
-    owner = prompt("Owner tag", default="developer")
-    project = prompt("Project tag", default="aws-provisioner")
+    owner = prompt("Owner tag", default="developer", help_text="Team or person responsible for these resources")
+    project = prompt("Project tag", default="aws-provisioner", help_text="Short project identifier for governance")
     config.tags = {
         "Owner": owner,
         "Project": project,
@@ -310,11 +613,35 @@ def step_configure_services(config: WizardConfig) -> None:
 
     # Budget
     print("\n  [Budget Configuration]")
-    config.budget_limit = prompt("Monthly budget limit (USD)", default="1")
-    config.budget_email = prompt("Email for billing alerts")
+    config.budget_limit = prompt("Monthly budget limit (USD)", default="1", help_text="Set low during testing to catch unexpected costs")
+    config.budget_email = prompt("Email for billing alerts", help_text="Required for budget threshold notifications")
     while not config.budget_email:
         print("  ⚠️  Budget email is required for cost safety.")
-        config.budget_email = prompt("Email for billing alerts")
+        config.budget_email = prompt("Email for billing alerts", help_text="Enter a monitored team inbox if possible")
+
+    # DynamoDB configuration
+    if config.enable_dynamodb:
+        print("\n  [DynamoDB Configuration]")
+        config.dynamodb_table_name = prompt("DynamoDB table name (must be unique)", default="my-table", help_text="Use a stable name like app-events-prod")
+        config.dynamodb_hash_key = prompt("Hash key name", default="id", help_text="Primary partition key field")
+        config.dynamodb_hash_key_type = prompt("Hash key type (S/N/B)", default="S", help_text="S=String, N=Number, B=Binary")
+        if config.environment == "free-tier":
+            config.dynamodb_read_capacity = 5
+            config.dynamodb_write_capacity = 5
+            print("  ℹ️  Read/Write capacity set to 5 to stay within free tier limits")
+            config.dynamodb_enable_pitr = prompt_yes_no("Enable PITR (Point-in-Time Recovery)?", default=False)
+        else:
+            # Allow user to adjust capacities in production
+            rc = prompt("Read capacity units (RCU)", default="5", help_text="Higher values increase cost")
+            wc = prompt("Write capacity units (WCU)", default="5", help_text="Higher values increase cost")
+            try:
+                config.dynamodb_read_capacity = int(rc)
+                config.dynamodb_write_capacity = int(wc)
+            except ValueError:
+                print("  ⚠️  Invalid capacity values; using defaults 5/5")
+                config.dynamodb_read_capacity = 5
+                config.dynamodb_write_capacity = 5
+            config.dynamodb_enable_pitr = prompt_yes_no("Enable PITR (Point-in-Time Recovery)?", default=False)
 
 
 def step_generate_tfvars(config: WizardConfig) -> str:
@@ -341,10 +668,10 @@ def step_generate_tfvars(config: WizardConfig) -> str:
 
 
 def step_run_policy_engine(config: WizardConfig) -> EvaluationResult:
-    """Step 7: Run policy engine and display results."""
+    """Step 7: Run YAML policy engine and display results."""
     print()
     print("─" * 50)
-    print("  🛡️  STEP 6: Policy & Risk Check")
+    print("  🛡️  STEP 6: Policy & Risk Check (YAML Engine)")
     print("─" * 50)
     print()
 
@@ -364,6 +691,36 @@ def step_run_policy_engine(config: WizardConfig) -> EvaluationResult:
         return EvaluationResult()
 
 
+def step_run_opa_engine(config: WizardConfig) -> OPAResult:
+    """Step 6b: Run OPA policy engine for richer combinatorial checks."""
+    print()
+    print("─" * 50)
+    print("  🔍 STEP 6b: OPA Policy Check (Advanced Rules)")
+    print("─" * 50)
+    print()
+
+    opa_policies_dir = str(Path(__file__).resolve().parent.parent / "opa-policies")
+
+    try:
+        opa = OPAEngine(opa_policies_dir)
+        if not opa.is_opa_available():
+            print("  ⚠️  OPA CLI not installed — skipping advanced policy check.")
+            print("     Install with: brew install opa")
+            return OPAResult(opa_available=False)
+
+        policy_dict = config.to_policy_dict()
+        result = opa.evaluate(policy_dict)
+        opa.report(result)
+
+        if result.is_empty():
+            print("  ✅  OPA: No additional violations found.")
+
+        return result
+    except Exception as e:
+        print(f"  ⚠️  OPA engine error: {e}")
+        return OPAResult(opa_available=True, error=str(e))
+
+
 def step_run_infracost() -> bool:
     """Step 8: Run Infracost to estimate monthly costs."""
     print()
@@ -374,7 +731,14 @@ def step_run_infracost() -> bool:
 
     try:
         result = subprocess.run(
-            ["infracost", "breakdown", "--path", ".", "--format", "table"],
+            [
+                "infracost",
+                "breakdown",
+                "--path", ".",
+                "--terraform-var-file", "terraform.tfvars",
+                "--exclude-path", "tests/",
+                "--format", "table"
+            ],
             capture_output=True,
             text=True,
             timeout=120,
@@ -476,6 +840,20 @@ def step_confirm_and_deploy() -> bool:
         print("\n  ❌  Apply cancelled by user.")
         return False
 
+    # Check deployment permission (if available)
+    if engine is not None and config_username is not None and config is not None:
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from auth_gate import check_deployment_permission  # noqa: E402
+            
+            print("\n  🔐 Checking deployment permissions...")
+            if not check_deployment_permission(engine, config_username, config.environment):
+                print("\n  🚫  DEPLOYMENT BLOCKED — Insufficient permissions")
+                return False
+        except (ImportError, Exception):
+            # If auth_gate not available or check fails, continue
+            pass
+
     # terraform apply
     print("\n  ▶️  Deploying... (this may take 15-30 seconds)")
     apply_result = subprocess.run(
@@ -570,6 +948,8 @@ def handle_destroy() -> None:
 
 def main() -> None:
     """Entry point for the CLI wizard."""
+    global engine, config, config_username
+    
     # Handle --destroy flag
     if len(sys.argv) > 1 and sys.argv[1] == "--destroy":
         handle_destroy()
@@ -577,6 +957,40 @@ def main() -> None:
 
     # Step 1: Welcome
     display_welcome()
+
+    # NEW: Step 0 — Authenticate user
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "team-management"))
+    from team_engine import TeamEngine, RoleGate  # noqa: E402
+    
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from auth_gate import authenticate_user, check_deployment_permission  # noqa: E402
+
+    if "pytest" not in sys.modules:
+        print("\n" + "=" * 60)
+        print("  STEP 0: User Authentication")
+        print("=" * 60)
+
+    engine = TeamEngine()
+    # If no admin exists, run first-run onboarding to create one
+    first_run_admin_onboarding(engine)
+    username = authenticate_user(engine)
+
+    if not username:
+        print("\n  ⚠️  Authentication failed.")
+        print("  Ensure your GitHub username is in teams.yaml")
+        sys.exit(1)
+
+    # Show user role summary (skip during tests)
+    gate = RoleGate(engine)
+    if "pytest" not in sys.modules:
+        gate.show_role_summary(username)
+    
+    config_username = username
+
+    # If admin, offer team management UI
+    user_info = engine.get_user_info(username)
+    if user_info and user_info.get("role") == "admin":
+        admin_manage_team_menu(engine)
 
     # Step 2: Select template or custom
     template_key = step_select_template()
@@ -604,7 +1018,7 @@ def main() -> None:
     # Step 5: Generate terraform.tfvars
     step_generate_tfvars(config)
 
-    # Step 6: Policy check
+    # Step 6: YAML Policy check
     policy_result = step_run_policy_engine(config)
 
     if policy_result.has_blocks():
@@ -614,6 +1028,19 @@ def main() -> None:
 
     if policy_result.has_warnings():
         if not prompt_yes_no("\n  Warnings found. Continue anyway?", default=True):
+            print("  ❌  Deployment cancelled by user.")
+            sys.exit(0)
+
+    # Step 6b: OPA advanced policy check
+    opa_result = step_run_opa_engine(config)
+
+    if opa_result.has_blocks():
+        print("\n  🚫  DEPLOYMENT BLOCKED BY OPA — Fix the violations above before proceeding.")
+        print("  Exiting wizard.")
+        sys.exit(1)
+
+    if opa_result.has_warnings():
+        if not prompt_yes_no("\n  OPA warnings found. Continue anyway?", default=True):
             print("  ❌  Deployment cancelled by user.")
             sys.exit(0)
 

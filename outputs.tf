@@ -35,3 +35,13 @@ output "iam_role_arn" {
   description = "ARN of the created IAM role."
   value       = var.enable_iam ? module.iam.role_arn : null
 }
+
+output "dynamodb_table_name" {
+  description = "Name of the created DynamoDB table."
+  value       = var.enable_dynamodb ? module.dynamodb.dynamodb_table_name : null
+}
+
+output "dynamodb_table_arn" {
+  description = "ARN of the created DynamoDB table."
+  value       = var.enable_dynamodb ? module.dynamodb.dynamodb_table_arn : null
+}

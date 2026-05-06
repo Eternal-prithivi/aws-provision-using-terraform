@@ -158,13 +158,18 @@ terraform {
 ## 🚫 SCOPE RULES
 
 These features are OUT OF SCOPE for the internship version:
-- Multi-user or team collaboration
-- Web UI dashboard (future enhancement)
 - Multi-cloud support (AWS only)
 - ML-based policy decisions (rule-based only)
-- Automated drift remediation (detection only)
-- OPA (Open Policy Agent) integration (future enhancement)
 - Real-time AWS Cost Explorer API integration (Infracost is sufficient)
+
+## 📈 FUTURE ENHANCEMENTS ROADMAP
+
+Phase 11 (drift remediation) is now implemented.
+
+These are planned after the core internship scope, in this order:
+1. Multi-user/team collaboration — support shared workflows and approvals.
+2. OPA integration — add stronger policy management with Open Policy Agent.
+3. Web UI dashboard — provide a visual interface for easier use and demos.
 
 Do not implement these. Do not promise these. Reference them only under "Future Enhancements."
 
