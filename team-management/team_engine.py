@@ -254,6 +254,78 @@ class TeamEngine:
         return len(errors) == 0, errors
 
 
+class RoleGate:
+    """Enforces role-based access to wizard functions."""
+
+    def __init__(self, engine: TeamEngine) -> None:
+        """Initialize with team engine instance."""
+        self.engine = engine
+
+    def check_can_deploy(self, username: str, environment: str) -> tuple[bool, str]:
+        """Check if user can deploy to environment.
+        
+        Args:
+            username: GitHub username
+            environment: Target environment (staging/production)
+            
+        Returns:
+            (can_deploy, message)
+        """
+        user_info = self.engine.get_user_info(username)
+        
+        if not user_info:
+            return False, f"❌ User '{username}' not found in team configuration"
+
+        role = user_info.get("role")
+        permissions = user_info.get("permissions", [])
+
+        if "deploy:create" not in permissions:
+            return False, f"❌ Role '{role}' cannot create deployments"
+
+        if environment == "production":
+            can_deploy = self.engine.can_deploy_to_environment(username, "production")
+            if not can_deploy:
+                return False, f"❌ Role '{role}' cannot deploy to production"
+
+        return True, f"✅ User '{username}' ({role}) allowed"
+
+    def get_allowed_environments(self, username: str) -> list[str]:
+        """Get list of environments user can deploy to.
+        
+        Args:
+            username: GitHub username
+            
+        Returns:
+            List of allowed environments
+        """
+        environments = []
+        for env in ["staging", "production"]:
+            if self.engine.can_deploy_to_environment(username, env):
+                environments.append(env)
+        return environments or ["staging"]
+
+    def show_role_summary(self, username: str) -> None:
+        """Display user's role and permissions.
+        
+        Args:
+            username: GitHub username
+        """
+        user_info = self.engine.get_user_info(username)
+        
+        if not user_info:
+            print(f"  ⚠️  User '{username}' not found in team configuration")
+            return
+
+        print("\n" + "=" * 60)
+        print(f"  👤 Authenticated: {user_info['name']}")
+        print("=" * 60)
+        print(f"  Role: {user_info['role_name']}")
+        print(f"  Teams: {', '.join(user_info['teams'])}")
+        print(f"  Environments: {', '.join(self.get_allowed_environments(username))}")
+        print("=" * 60)
+        print()
+
+
 def build_parser() -> Any:
     """Build argument parser for CLI."""
     import argparse

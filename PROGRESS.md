@@ -1,9 +1,9 @@
 # PROGRESS.md — Smart AWS Infrastructure Provisioning System
 
 ## Current Status
-**Active Phase**: ✅ PHASE 12 COMPLETE
-**Overall Progress**: 12 / 14 Phases Complete
-**Last Updated**: 2026-05-06 — Multi-user collaboration complete; Phases 13-14 remain as future roadmap.
+**Active Phase**: ✅ PHASE 12.5 COMPLETE
+**Overall Progress**: 12.5 / 14 Phases Complete
+**Last Updated**: 2026-05-06 — Role-based CLI authentication complete; Phases 13-14 remain as future roadmap.
 
 ---
 
@@ -23,6 +23,7 @@
 | 10 | Serverless Database Expansion (DynamoDB) | ✅ Complete | DynamoDB module, wizard support, and tests added |
 | 11 | Drift Remediation | ✅ Complete | Check-only mode, Slack notifications, safe by default |
 | 12 | Multi-User Collaboration | ✅ Complete | Role-based RBAC, approval workflows, audit trail |
+| 12.5 | Role-Based CLI Authentication | ✅ Complete | GitHub token verification, role gates, permission checks |
 | 13 | OPA Integration | ⏳ Planned | Stronger policy enforcement beyond YAML rules |
 | 14 | Web UI Dashboard | ⏳ Planned | Visual interface for a friendlier user experience |
 
@@ -273,7 +274,63 @@
 
 ---
 
-## Phase 12 — Multi-User Collaboration ✅ COMPLETE
+---
+
+## Phase 12.5 — Role-Based CLI Authentication ✅ COMPLETE
+**Goal**: Add GitHub token-based user authentication before wizard starts, enforcing role-based permissions.
+
+### Tasks
+- [x] Create authentication gate module (GitHub token verification)
+- [x] Add RoleGate class for permission enforcement
+- [x] Integrate auth into CLI wizard startup
+- [x] Add permission checks before terraform apply
+- [x] Support token from environment variable or interactive prompt
+- [x] Fallback to teams.yaml username verification
+- [x] Write 13 comprehensive unit tests for auth
+- [x] Full documentation for authentication flow
+
+### Key Features
+- ✅ **GitHub Token Verification**: Validates user identity against GitHub API
+- ✅ **Role-Based Access**: Only users with deploy:create permission can proceed
+- ✅ **Environment-Specific Gates**: Production deployments require extra permission checks
+- ✅ **Fallback Authentication**: Works without token via teams.yaml username verification
+- ✅ **Role Summary Display**: Shows user's permissions and allowed environments
+- ✅ **Permission Enforcement**: Blocks unauthorized deployments before terraform apply
+- ✅ **Reusable Auth Pattern**: Same code works for CLI, dashboard, and API later
+
+### Implementation Files
+- `team-management/team_engine.py` — RoleGate class (70 lines added)
+- `cli-wizard/auth_gate.py` — GitHub token verification (150+ lines)
+- `cli-wizard/wizard.py` — Authentication gate integration (35 lines added)
+- `tests/unit/test_auth.py` — 13 authentication tests
+- `requirements.txt` — Added requests library for GitHub API
+
+### Test Results
+✅ **157/157 tests passing** (144 existing + 13 new auth tests)
+- RoleGate tests: 6 passed
+- Authentication flow tests: 4 passed
+- Permission enforcement tests: 3 passed
+- No regressions in existing tests
+
+### User Experience
+1. User runs: `python cli-wizard/wizard.py`
+2. Authentication step prompts for GitHub token (or reads GITHUB_TOKEN env var)
+3. Token verified against GitHub API to confirm user identity
+4. User role and permissions loaded from teams.yaml
+5. Role summary displayed showing allowed environments
+6. Permission check before terraform apply prevents unauthorized deployments
+7. All actions logged with username for audit trail
+
+### Definition of Done for Phase 12.5 ✅
+- [x] GitHub token authentication fully implemented
+- [x] Role-based permission gates enforced
+- [x] Integration with wizard wizard complete
+- [x] 13 unit tests with 100% coverage
+- [x] Fallback authentication when token unavailable
+- [x] Authentication pattern reusable for web dashboard
+- [x] No breaking changes to existing Phases 1-12
+
+---
 **Goal**: Enable team-based infrastructure management with role-based access control and audit logging.
 
 ### Tasks

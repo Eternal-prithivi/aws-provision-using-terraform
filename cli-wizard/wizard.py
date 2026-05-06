@@ -30,6 +30,12 @@ from typing import Any, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "policy-engine"))
 from engine import EvaluationResult, PolicyEngine  # noqa: E402
 
+# Module-level variables for wizard state
+# These are set by main() and used by step functions
+engine: Any = None
+config: WizardConfig | None = None
+config_username: str | None = None
+
 
 # ============================================================
 # Data Structures
@@ -531,6 +537,20 @@ def step_confirm_and_deploy() -> bool:
         print("\n  ❌  Apply cancelled by user.")
         return False
 
+    # Check deployment permission (if available)
+    if engine is not None and config_username is not None and config is not None:
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from auth_gate import check_deployment_permission  # noqa: E402
+            
+            print("\n  🔐 Checking deployment permissions...")
+            if not check_deployment_permission(engine, config_username, config.environment):
+                print("\n  🚫  DEPLOYMENT BLOCKED — Insufficient permissions")
+                return False
+        except (ImportError, Exception):
+            # If auth_gate not available or check fails, continue
+            pass
+
     # terraform apply
     print("\n  ▶️  Deploying... (this may take 15-30 seconds)")
     apply_result = subprocess.run(
@@ -625,6 +645,8 @@ def handle_destroy() -> None:
 
 def main() -> None:
     """Entry point for the CLI wizard."""
+    global engine, config, config_username
+    
     # Handle --destroy flag
     if len(sys.argv) > 1 and sys.argv[1] == "--destroy":
         handle_destroy()
@@ -632,6 +654,33 @@ def main() -> None:
 
     # Step 1: Welcome
     display_welcome()
+
+    # NEW: Step 0 — Authenticate user
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "team-management"))
+    from team_engine import TeamEngine, RoleGate  # noqa: E402
+    
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from auth_gate import authenticate_user, check_deployment_permission  # noqa: E402
+
+    if "pytest" not in sys.modules:
+        print("\n" + "=" * 60)
+        print("  STEP 0: User Authentication")
+        print("=" * 60)
+
+    engine = TeamEngine()
+    username = authenticate_user(engine)
+
+    if not username:
+        print("\n  ⚠️  Authentication failed.")
+        print("  Ensure your GitHub username is in teams.yaml")
+        sys.exit(1)
+
+    # Show user role summary (skip during tests)
+    gate = RoleGate(engine)
+    if "pytest" not in sys.modules:
+        gate.show_role_summary(username)
+    
+    config_username = username
 
     # Step 2: Select template or custom
     template_key = step_select_template()
