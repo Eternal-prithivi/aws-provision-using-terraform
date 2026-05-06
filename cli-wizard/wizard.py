@@ -201,6 +201,197 @@ def display_welcome() -> None:
     print("  Interactive CLI Wizard")
     print("=" * 60)
     print()
+
+
+def _has_admin(engine: Any) -> bool:
+    """Return True if any user in engine has role 'admin'."""
+    try:
+        for u in engine.users.values():
+            if getattr(u, "role", "") == "admin":
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def first_run_admin_onboarding(engine: Any) -> None:
+    """Create the first admin user if none exist.
+
+    This is non-interactive when running under pytest to avoid blocking tests.
+    """
+    if "pytest" in sys.modules:
+        return
+
+    if _has_admin(engine):
+        return
+
+    print("\n" + "=" * 60)
+    print("  FIRST-TIME SETUP: Create an Admin Account")
+    print("=" * 60)
+    print("No admin user found in configuration. Create the first admin now.")
+    print()
+
+    name = prompt("Full name", default="Administrator")
+    print("  (Used for audit logs and notifications)")
+    email = prompt("Email address", default="admin@example.com")
+    print("  (Used for alerts and audit contact)")
+    github_username = prompt("GitHub username (example: alice-chen)")
+    print("  Tip: find this on your GitHub profile page: https://github.com/<your-handle>")
+
+    if not prompt_yes_no(f"Create admin user '{github_username}' with role admin?", default=True):
+        print("Skipping admin creation. You must add an admin to teams.yaml manually.")
+        return
+
+    # Ensure teams section exists
+    teams = engine.config.setdefault("teams", {})
+    target_team = "devops-core"
+    if target_team not in teams:
+        teams[target_team] = {
+            "name": "DevOps Core Team",
+            "description": "Auto-created team for first admin",
+            "members": [],
+            "permissions": ["deploy:production", "deploy:staging"],
+            "requires_approval": False,
+        }
+
+    member = {
+        "name": name,
+        "email": email,
+        "role": "admin",
+        "github_username": github_username,
+    }
+
+    teams[target_team].setdefault("members", []).append(member)
+
+    # Persist and reload
+    try:
+        engine.save_config()
+        engine._load_config()
+        print(f"\n  ✅ Admin user '{github_username}' added to team '{target_team}'.")
+    except Exception as e:
+        print(f"\n  ❌ Failed to write teams.yaml: {e}")
+        return
+
+    if prompt_yes_no("Commit this change to git?", default=False):
+        try:
+            subprocess.run(["git", "add", str(engine.config_path)], check=True)
+            subprocess.run(["git", "commit", "-m", f"Add initial admin {github_username} to teams.yaml"], check=True)
+            print("  ✅ Changes committed. Please push to remote if desired.")
+        except Exception:
+            print("  ⚠️  Git commit failed or git not available. Please commit manually.")
+
+
+def admin_manage_team_menu(engine: Any) -> None:
+    """Simple admin menu to list/add/edit/remove team members.
+
+    This runs interactively; skipped during tests.
+    """
+    if "pytest" in sys.modules:
+        return
+
+    while True:
+        print("\n" + "-" * 50)
+        print("  TEAM MANAGEMENT (admin)")
+        print("-" * 50)
+        print("  1) List members")
+        print("  2) Add member")
+        print("  3) Edit member")
+        print("  4) Remove member")
+        print("  5) Exit team management")
+
+        choice = prompt_choice("Choose an action", ["List", "Add", "Edit", "Remove", "Exit"])
+        if choice == "List":
+            for team_name, team_data in engine.config.get("teams", {}).items():
+                print(f"\nTeam: {team_name} — {team_data.get('name','')}")
+                for m in team_data.get("members", []):
+                    print(f"  - {m.get('name')} ({m.get('github_username')}) — {m.get('role')}")
+
+        elif choice == "Add":
+            name = prompt("Full name")
+            email = prompt("Email")
+            gh = prompt("GitHub username (example: alice-chen)")
+            role = prompt_choice("Role", ["admin", "devops", "developer", "viewer"])  # type: ignore[arg-type]
+            teams_list = list(engine.config.get("teams", {}).keys())
+            team_choice = None
+            if teams_list:
+                team_choice = prompt_choice("Choose team or create new", teams_list + ["Create new team"])  # type: ignore[arg-type]
+            else:
+                team_choice = "Create new team"
+
+            if team_choice == "Create new team":
+                new_team = prompt("New team key (no spaces)")
+                engine.config.setdefault("teams", {})[new_team] = {
+                    "name": new_team,
+                    "description": "Created from wizard",
+                    "members": [],
+                    "permissions": ["deploy:staging"],
+                    "requires_approval": True,
+                }
+                target = new_team
+            else:
+                target = team_choice
+
+            engine.config.setdefault("teams", {}).setdefault(target, {}).setdefault("members", []).append({
+                "name": name,
+                "email": email,
+                "role": role,
+                "github_username": gh,
+            })
+
+            try:
+                engine.save_config()
+                engine._load_config()
+                print(f"  ✅ Member {gh} added to {target}.")
+            except Exception as e:
+                print(f"  ❌ Failed to save teams.yaml: {e}")
+
+        elif choice == "Edit":
+            gh = prompt("GitHub username of member to edit")
+            found = False
+            for team_name, team_data in engine.config.get("teams", {}).items():
+                for m in team_data.get("members", []):
+                    if m.get("github_username") == gh:
+                        print(f"Found {m.get('name')} in {team_name}")
+                        new_role = prompt_choice("New role", ["admin", "devops", "developer", "viewer"])  # type: ignore[arg-type]
+                        m["role"] = new_role
+                        m["email"] = prompt("Email", default=m.get("email", ""))
+                        try:
+                            engine.save_config()
+                            engine._load_config()
+                            print(f"  ✅ Updated {gh}.")
+                        except Exception as e:
+                            print(f"  ❌ Failed to save teams.yaml: {e}")
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                print(f"  ⚠️  Member {gh} not found")
+
+        elif choice == "Remove":
+            gh = prompt("GitHub username of member to remove")
+            removed = False
+            for team_name, team_data in engine.config.get("teams", {}).items():
+                members = team_data.get("members", [])
+                for i, m in enumerate(list(members)):
+                    if m.get("github_username") == gh:
+                        if prompt_yes_no(f"Confirm remove {gh} from {team_name}?", default=False):
+                            members.pop(i)
+                            try:
+                                engine.save_config()
+                                engine._load_config()
+                                print(f"  ✅ Removed {gh}.")
+                            except Exception as e:
+                                print(f"  ❌ Failed to save teams.yaml: {e}")
+                            removed = True
+                        break
+                if removed:
+                    break
+            if not removed:
+                print(f"  ⚠️  Member {gh} not found or not removed")
+
+        elif choice == "Exit":
+            break
     print("  This wizard will help you:")
     print("    • Select and configure AWS services")
     print("    • Check security policies before deployment")
@@ -668,6 +859,8 @@ def main() -> None:
         print("=" * 60)
 
     engine = TeamEngine()
+    # If no admin exists, run first-run onboarding to create one
+    first_run_admin_onboarding(engine)
     username = authenticate_user(engine)
 
     if not username:
@@ -681,6 +874,11 @@ def main() -> None:
         gate.show_role_summary(username)
     
     config_username = username
+
+    # If admin, offer team management UI
+    user_info = engine.get_user_info(username)
+    if user_info and user_info.get("role") == "admin":
+        admin_manage_team_menu(engine)
 
     # Step 2: Select template or custom
     template_key = step_select_template()

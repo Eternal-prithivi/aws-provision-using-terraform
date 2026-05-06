@@ -198,6 +198,28 @@ Steps:
 5. After 8 hours, auto-approves if not yet approved
 6. Deployment proceeds
 
+## First-run onboarding and Admin UI (wizard)
+
+The CLI wizard now includes a first-run onboarding flow to create the initial
+admin account if none exist. This helps non-technical operators bootstrap the
+system without manually editing YAML.
+
+- When no `admin` user is found, the wizard prompts for name, email, and
+  GitHub username and inserts the entry into `team-management/teams.yaml`.
+- The wizard makes a timestamped backup before writing and offers to commit
+  the change to Git if a Git repository is present.
+
+Admins who sign in with their GitHub token see a "Team Management" menu in
+the wizard where they can list, add, edit, and remove members. Changes are
+persisted to `team-management/teams.yaml` and validated by reloading the
+configuration.
+
+Security notes:
+- The wizard does not store or manage passwords. Users authenticate with
+  their own GitHub personal access tokens (PATs).
+- For auditability and safer change review, prefer making membership changes
+  via Git pull requests rather than direct edits when possible.
+
 ### Staging Deployments
 
 Staging is faster with single approval:

@@ -217,6 +217,26 @@ class TeamEngine:
             "permissions": role.permissions if role else [],
         }
 
+    def save_config(self) -> None:
+        """Persist current `self.config` to the config file path.
+
+        This will make a timestamped backup of the existing file before
+        writing, then rewrite the YAML from the in-memory `self.config`.
+        """
+        bak = self.config_path.with_suffix(self.config_path.suffix + f".bak.{int(datetime.now(tz=timezone.utc).timestamp())}")
+        # Backup existing file
+        try:
+            if self.config_path.exists():
+                with open(self.config_path, "rb") as src, open(bak, "wb") as dst:
+                    dst.write(src.read())
+        except Exception:
+            # If backup fails, continue but log is omitted here to keep simple
+            pass
+
+        # Write the YAML file
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(self.config, f, sort_keys=False)
+
     def list_approvers_for_environment(self, environment: str) -> list[str]:
         """Get list of users who can approve deployments for an environment."""
         approvers = []
