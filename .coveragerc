@@ -1,0 +1,15 @@
+[run]
+omit =
+    generate_ppt.py
+    cli-wizard/auth_gate.py
+    web-ui/frontend/*
+    */node_modules/*
+    .venv/*
+    */__pycache__/*
+    team-management/__init__.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__
+    pass
