@@ -21,6 +21,15 @@ When a new chat or agent session starts, execute in this exact order:
 
 **Do not skip steps. Do not write code before completing all 7 steps.**
 
+## First-run Admin Onboarding (wizard)
+
+When the CLI wizard is run for the first time and no `admin` user exists in
+`team-management/teams.yaml`, the wizard will prompt to create the initial
+admin account (full name, email, GitHub username). The wizard makes a
+timestamped backup, writes the YAML, and can optionally commit the change to
+Git. Admins gain access to an in-wizard Team Management menu to add/edit/remove
+members. See `docs/team-management.md` for details.
+
 ---
 
 ## 📋 TASK EXECUTION PROTOCOL
