@@ -1,0 +1,171 @@
+# Team Management Configuration
+# Define teams, roles, and approval workflows
+
+roles:
+  admin:
+    name: "Administrator"
+    description: "Full access to all infrastructure operations"
+    permissions:
+      - deploy:create
+      - deploy:approve
+      - deploy:auto_approve
+      - team:manage
+      - audit:view_all
+      - settings:modify
+    auto_approve_threshold: 0  # Auto-approve immediately
+    requires_approval: false
+    max_per_day: null  # Unlimited deployments per day
+
+  devops:
+    name: "DevOps Engineer"
+    description: "Deploy and manage infrastructure, can approve deployments"
+    permissions:
+      - deploy:create
+      - deploy:approve
+      - audit:view_all
+      - deploy:schedule
+    auto_approve_threshold: 0
+    requires_approval: false
+    max_per_day: 10
+
+  developer:
+    name: "Developer"
+    description: "Can create deployment requests, needs approval"
+    permissions:
+      - deploy:create
+      - audit:view_own
+      - deploy:view
+    auto_approve_threshold: null
+    requires_approval: true  # Requires DevOps/Admin approval
+    max_per_day: 5
+    approval_required_from:
+      - admin
+      - devops
+
+  viewer:
+    name: "Viewer"
+    description: "Read-only access to audit logs and deployment history"
+    permissions:
+      - audit:view_own
+      - deploy:view
+    requires_approval: null
+
+# Team definitions
+teams:
+  devops-core:
+    name: "DevOps Core Team"
+    description: "Production deployment and infrastructure management"
+    members:
+      - name: "Alice Chen"
+        email: alice.chen@company.com
+        role: admin
+        github_username: alice-chen
+      - name: "Bob Martinez"
+        email: bob.martinez@company.com
+        role: devops
+        github_username: bob-martinez
+    permissions:
+      - deploy:production
+      - deploy:staging
+    requires_approval: false
+    slack_channel: "#devops-alerts"
+
+  platform-team:
+    name: "Platform Team"
+    description: "Platform infrastructure and shared services"
+    members:
+      - name: "Carol Singh"
+        email: carol.singh@company.com
+        role: devops
+        github_username: carol-singh
+      - name: "David Lee"
+        email: david.lee@company.com
+        role: developer
+        github_username: david-lee
+    permissions:
+      - deploy:staging
+      - deploy:production  # With approval
+    requires_approval: true
+    slack_channel: "#platform-alerts"
+
+  application-team:
+    name: "Application Team"
+    description: "Application deployment and configuration"
+    members:
+      - name: "Eve Johnson"
+        email: eve.johnson@company.com
+        role: developer
+        github_username: eve-johnson
+      - name: "Frank Wilson"
+        email: frank.wilson@company.com
+        role: developer
+        github_username: frank-wilson
+    permissions:
+      - deploy:staging
+    requires_approval: true
+    slack_channel: "#app-deploys"
+
+# Approval workflows
+approval_workflows:
+  production:
+    name: "Production Deployment"
+    environments:
+      - production
+    requires_approvals: 2  # 2 approvals required
+    approvers_must_include:
+      - admin
+      - devops
+    auto_approve_after_hours: 480  # 8 hours waiting time
+    notify_slack: true
+    allow_weekend_deploy: false
+    allow_holiday_deploy: false
+
+  staging:
+    name: "Staging Deployment"
+    environments:
+      - staging
+    requires_approvals: 1  # 1 approval required
+    approvers_must_include:
+      - devops
+    auto_approve_after_hours: 240  # 4 hours waiting time
+    notify_slack: true
+    allow_weekend_deploy: true
+    allow_holiday_deploy: false
+
+# Scheduled maintenance windows (deployments allowed)
+maintenance_windows:
+  - name: "Business Hours"
+    timezone: "America/New_York"
+    allowed_days:
+      - Monday
+      - Tuesday
+      - Wednesday
+      - Thursday
+      - Friday
+    start_time: "09:00"
+    end_time: "18:00"
+
+  - name: "Weekly Maintenance"
+    timezone: "UTC"
+    allowed_days:
+      - Wednesday
+    start_time: "02:00"
+    end_time: "04:00"
+
+# Escalation policies
+escalation_policies:
+  production:
+    level_1_wait_time: 30  # minutes
+    level_1_notify:
+      - team: devops-core
+        role: devops
+    level_2_wait_time: 60
+    level_2_notify:
+      - team: devops-core
+        role: admin
+
+  staging:
+    level_1_wait_time: 15
+    level_1_notify:
+      - team: platform-team
+        role: devops

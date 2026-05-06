@@ -12,9 +12,11 @@
 - **Policy Engine** — 8 security & governance rules automatically checked before deployment
 - **Cost Estimation** — Infracost integration shows monthly costs before you deploy
 - **Drift Detection** — Daily GitHub Actions job detects unauthorized infrastructure changes
+- **Drift Remediation** — Check-only analysis of drift with safe-by-default mode
+- **Multi-User Collaboration** — Role-based access control with approval workflows and audit trails
 - **Free-Tier Safe** — Default configuration stays within AWS Free Tier ($0/month)
 - **Modular Architecture** — 7 independent Terraform modules (VPC, EC2, S3, IAM, CloudWatch, Billing, DynamoDB)
-- **113 Tests** — covering policy engine, wizard, drift remediation, and deployment flow
+- **144 Tests** — covering policy engine, wizard, drift remediation, team collaboration, and deployment flow
 
 ## Documentation
 
@@ -29,12 +31,11 @@ Project-facing documentation lives in the [`docs/`](docs) folder:
 
 ## Roadmap
 
-Completed: Phase 11 (drift remediation).
+Completed: Phases 1-12 (all core features + multi-user collaboration).
 
 The next planned enhancements, in order, are:
-1. Multi-user/team collaboration — support shared workflows for teams.
-2. OPA integration — extend policy control with Open Policy Agent.
-3. Web UI dashboard — add a visual interface for easier interaction.
+1. OPA integration — extend policy control with Open Policy Agent.
+2. Web UI dashboard — add a visual interface for easier interaction.
 
 ---
 
