@@ -146,8 +146,12 @@ terraform-project/
 ├── policy-engine/
 │   ├── engine.py                   ← reads rules, evaluates config
 │   └── rules.yaml                  ← 8 rules: security + cost + governance
+├── opa-policies/
+│   ├── aws_security.rego           ← Rego policy file (10 rules incl. combined-risk)
+│   └── opa_engine.py               ← Python wrapper, OPAResult + OPAEngine classes
 ├── cli-wizard/
-│   └── wizard.py                   ← interactive CLI entry point
+│   ├── wizard.py                   ← interactive CLI entry point
+│   └── auth_gate.py                ← GitHub token auth + role permission gate
 ├── drift-detection/
 │   └── detect.sh                   ← terraform refresh + plan -detailed-exitcode
 ├── tests/
@@ -159,6 +163,17 @@ terraform-project/
     ├── terraform.yml               ← main CI/CD: test → validate → plan
     ├── infracost.yml               ← cost diff on PRs
     └── drift-detection.yml         ← daily cron job
+
+web-ui/
+├── api/
+│   ├── server.py                   ← FastAPI backend (18 REST endpoints)
+│   ├── requirements.txt            ← fastapi, uvicorn, pydantic
+│   └── __init__.py
+└── frontend/                       ← Next.js 16 + Tailwind CSS 4
+    ├── src/app/                    ← 6 pages (dashboard, deploy, policies, audit, team, drift)
+    ├── src/components/layout/      ← Sidebar, TopBar
+    ├── src/lib/api.ts              ← typed API client
+    └── package.json
 ```
 
 ---
@@ -190,4 +205,4 @@ A task is only done when ALL of the following are true:
 
 ---
 
-*Last updated: 2026-05-06 | Core Phases: 10 complete | Roadmap: Phases 11-14 planned*
+*Last updated: 2026-05-06 | Phase 15 in progress*

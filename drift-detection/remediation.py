@@ -173,15 +173,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Terraform executable to invoke.",
     )
     parser.add_argument(
-        "--check-only",
+        "--apply",
         action="store_true",
-        default=True,
-        help="Only show what would change (default: True for safety).",
+        help="Actually apply the remediation instead of just checking. Disables check-only mode.",
     )
     parser.add_argument(
         "--auto-approve",
         action="store_true",
-        help="Auto-apply changes (requires --check-only=False, not recommended).",
+        help="Auto-apply changes (requires --apply, not recommended).",
     )
     return parser
 
@@ -194,8 +193,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     project_root = Path(args.project_root)
     report_file = Path(args.report_file)
     
-    # Default to check_only=True unless explicitly disabled
-    check_only = args.check_only if hasattr(args, 'check_only') else True
+    # Check only is true unless --apply is provided
+    check_only = not args.apply
     
     result = remediate_drift(
         project_root=project_root,

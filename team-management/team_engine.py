@@ -88,7 +88,10 @@ class TeamEngine:
         
         with open(self.config_path, encoding="utf-8") as f:
             self.config = yaml.safe_load(f) or {}
-        
+        # Reset parsed caches before parsing new config
+        self.roles = {}
+        self.users = {}
+
         self._parse_roles()
         self._parse_users()
 

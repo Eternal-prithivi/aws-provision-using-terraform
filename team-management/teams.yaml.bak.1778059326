@@ -52,6 +52,10 @@ teams:
       email: prithivi957@gmail.com
       role: admin
       github_username: Eternal-prithivi
+    - name: Bob Martinez
+      email: bob.martinez@company.com
+      role: devops
+      github_username: bob-martinez
     permissions:
     - deploy:production
     - deploy:staging

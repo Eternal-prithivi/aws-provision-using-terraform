@@ -124,24 +124,60 @@ rules:
 
 ---
 
+## OPA Policy Engine (Phase 13)
+
+**Policy file**: `opa-policies/aws_security.rego`
+**Engine file**: `opa-policies/opa_engine.py`
+
+Augments the YAML rules engine with richer, combinatorial Rego policies.
+Running as **Step 6b** in the wizard — after YAML engine, before Infracost.
+
+### Design Principle
+OPA does NOT replace the YAML engine. It adds a second, more powerful layer:
+- YAML engine: Simple key-value rules (fast, human-readable)
+- OPA engine: Combinatorial cross-field logic (expressive, standards-based)
+
+### OPA Rules
+| # | Rule ID | Severity | What It Checks |
+|---|---|---|---|
+| 1 | opa_public_s3 | block | s3_bucket_public == true |
+| 2 | opa_open_ssh | block | ssh_open_to_world == true |
+| 3 | opa_open_rdp | block | rdp_open_to_world == true |
+| 4 | opa_iam_wildcard | block | iam_wildcard == true |
+| 5 | opa_public_unencrypted_s3 | block | **Combined**: public AND unencrypted S3 |
+| 6 | opa_production_no_audit | block | **Combined**: production + no CloudTrail + no tags |
+| 7 | opa_cloudtrail_disabled | warning | cloudtrail_enabled == false |
+| 8 | opa_s3_no_encryption | warning | s3_encryption == false |
+| 9 | opa_missing_tags | warning | count(tags) == 0 |
+| 10 | opa_expensive_ec2 | warning | instance_type not in free-tier set |
+
+### Graceful Degradation
+If OPA CLI is not installed, the engine returns an empty result and the wizard continues without blocking.
+
+---
+
 ## CLI Wizard Flow
 
 ```
 python cli-wizard/wizard.py
   │
+  ├── 0. GitHub token auth → role check (Phase 12.5)
   ├── 1. Display welcome + available templates
   ├── 2. Ask: select template or custom
-  ├── 3. Ask: select services (VPC, EC2, S3, IAM, CloudWatch)
+  ├── 3. Ask: select services (VPC, EC2, S3, IAM, CloudWatch, DynamoDB)
   ├── 4. Ask: environment (free-tier or production)
   ├── 5. Ask: configuration options per service
   ├── 6. Generate terraform.tfvars
-  ├── 7. Run Policy Engine → show violations/warnings
-  │       ├── BLOCK → stop, explain, exit
-  │       └── WARNINGS → show, ask confirmation
-  ├── 8. Run Infracost → show monthly cost estimate
-  ├── 9. Final confirmation: "Deploy? [y/N]"
-  ├── 10. Run: terraform init
-  └── 11. Run: terraform apply
+  ├── 6a. Run YAML Policy Engine → show violations/warnings
+  │        ├── BLOCK → stop, explain, exit
+  │        └── WARNINGS → show, ask confirmation
+  ├── 6b. Run OPA Policy Engine → advanced combinatorial checks (Phase 13)
+  │        ├── BLOCK → stop, explain, exit
+  │        └── WARNINGS → show, ask confirmation
+  ├── 7. Run Infracost → show monthly cost estimate
+  ├── 8. Final confirmation: "Deploy? [y/N]"
+  ├── 9. Run: terraform init
+  └── 10. Run: terraform apply
 ```
 
 ---

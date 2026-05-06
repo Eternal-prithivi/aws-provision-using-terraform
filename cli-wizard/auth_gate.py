@@ -83,6 +83,8 @@ def authenticate_user(
             return None
         
         print("\n  ⚠️  No token provided. Using team config fallback.\n")
+        print("  Tip: your GitHub username is in your profile URL:")
+        print("  https://github.com/<your-handle>\n")
         
         # Fallback: ask for username directly
         username = input("  Enter your GitHub username: ").strip()
@@ -136,6 +138,8 @@ def authenticate_user(
     except ImportError:
         print("  ⚠️  requests library not installed (pip install requests)\n")
         print("  Falling back to username verification...\n")
+        print("  Tip: your GitHub username is in your profile URL:")
+        print("  https://github.com/<your-handle>\n")
         
         # Fallback to username check
         username = input("  Enter your GitHub username: ").strip()

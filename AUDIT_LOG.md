@@ -6,6 +6,177 @@
 
 ---
 
+## [SESSION-011] Phase 15 Extended Web UI Features
+**Date**: 2026-05-06
+**Agent/Human**: AI Agent (Antigravity)
+**Phase**: Phase 15 (UI/UX Polish & Extended Functionality)
+
+### Actions Taken
+
+**1. Drift Remediation Automation**
+- Fixed `remediation.py` Python script to correctly parse boolean flags (replaced `--check-only` with `--apply`).
+- Added `trigger_drift_remediation` endpoint in `server.py` to wrap the script execution.
+- Added "Dry Run Fix" and "Apply Fix" UI buttons in the `app/drift/page.tsx` page.
+
+**2. Team Admin Operations**
+- Added `DELETE /api/team/user/{username}` and `PUT /api/team/user/role` endpoints in `server.py` that modify `teams.yaml`.
+- Added dynamic rendering in `app/team/page.tsx` allowing Admin users to change roles and remove users.
+
+**3. Approval Workflow & Slack**
+- Added approval queue endpoints (`POST /api/approvals/request`, `POST /api/approvals/action`) to track deployment requests.
+- Integrated Slack Webhook notification payload construction when approvals are requested/granted.
+- Added "Deployment Approvals" panel in the Team page to process pending deployments.
+
+### State & Resources
+- Python backend expanded to 19 endpoints
+- TypeScript API client fully mapped
+
+### Test Results
+- 221 tests passing successfully
+- Terraform applies and destroys properly
+
+### Next Task
+- Custom policies UI, Search/Notifications, and Admin Settings panel.
+
+---
+
+## [SESSION-010] Phase 14 Web UI Dashboard — COMPLETE
+**Date**: 2026-05-06
+**Agent/Human**: AI Agent (Antigravity)
+**Phase**: Phase 14 (Web UI Dashboard)
+
+### Actions Taken
+
+**1. FastAPI Backend (Sub-phase 14a)** — Already complete from prior session:
+- `web-ui/api/server.py` — 18 REST endpoints, 736 lines
+- Endpoints: health, dashboard, templates, config validation, cost estimate, deploy (plan/apply/destroy), policies (YAML/OPA), audit, team, drift
+- SSE streaming for terraform command output
+
+**2. Next.js Frontend Scaffold (Sub-phase 14b)**:
+- Root layout with Sidebar navigation + TopBar
+- Design system: dark mode, glassmorphism cards, custom CSS tokens
+- API client (`lib/api.ts`) with typed interfaces for all endpoints
+
+**3. Dashboard Page** (`/`):
+- 4 status cards: Active Services, Policy Health, Cost Estimate, Drift Status
+- Recent activity table from audit events
+- Loading skeletons and error states
+
+**4. Deploy Wizard Page** (`/deploy`, Sub-phase 14c):
+- 7-step animated wizard: Template → Services → Environment → Configure → Policy Check → Cost → Deploy
+- Template selector (3 prebuilt + custom)
+- Service toggles with descriptions and visual feedback
+- Live policy check results (YAML + OPA side-by-side)
+- Cost breakdown table from Infracost
+- Terminal output streaming for terraform apply
+
+**5. Policy Dashboard** (`/policies`, Sub-phase 14d):
+- Tabbed view: YAML Rules (8) and OPA Rules
+- Rules table with severity badges
+- Interactive config test runner (paste JSON → see results)
+
+**6. Audit Log** (`/audit`, Sub-phase 14d):
+- Summary cards with aggregate counts
+- Filterable table (actor, environment, action)
+- JSON export button
+
+**7. Team Management** (`/team`, Sub-phase 14e):
+- Role definition cards (Admin, DevOps, Developer, Viewer)
+- Team member grid with role badges
+- Add user form with validation
+
+**8. Drift Detection** (`/drift`, Sub-phase 14e):
+- Status banner (green/red/amber based on last scan)
+- Drift report viewer (formatted text)
+- "Run Scan" button with live terminal output via SSE
+
+**9. Tests (Sub-phase 14g)**:
+- 26 new FastAPI endpoint tests in `tests/unit/test_server.py`
+- All tests use TestClient (no real AWS calls)
+
+### Test Results
+✅ **216/216 tests passing** (190 existing + 26 new API tests)
+- Zero regressions across Phases 1-13
+- Next.js build compiles successfully (all 6 routes)
+
+### Files Created
+- `web-ui/frontend/src/lib/api.ts` — API client
+- `web-ui/frontend/src/app/globals.css` — Design system
+- `web-ui/frontend/src/app/layout.tsx` — Root layout
+- `web-ui/frontend/src/app/page.tsx` — Dashboard
+- `web-ui/frontend/src/app/deploy/page.tsx` — Deploy Wizard
+- `web-ui/frontend/src/app/policies/page.tsx` — Policy Dashboard
+- `web-ui/frontend/src/app/audit/page.tsx` — Audit Log
+- `web-ui/frontend/src/app/team/page.tsx` — Team Management
+- `web-ui/frontend/src/app/drift/page.tsx` — Drift Detection
+- `web-ui/frontend/src/components/layout/Sidebar.tsx` — Navigation
+- `web-ui/frontend/src/components/layout/TopBar.tsx` — Header
+- `tests/unit/test_server.py` — 26 API endpoint tests
+
+### Files Modified
+- `PROGRESS.md` — Phase 14 marked complete
+- `AUDIT_LOG.md` — This entry
+
+---
+
+## [SESSION-009] Phase 13 OPA Integration — COMPLETE
+**Date**: 2026-05-06
+**Agent/Human**: AI Agent
+**Phase**: Phase 13 (OPA Integration)
+
+### Actions Taken
+
+**1. Installed OPA CLI** (`brew install opa` — v1.16.1)
+
+**2. Written `opa-policies/aws_security.rego`**:
+- 4 standard block rules: public_s3, open_ssh, open_rdp, iam_wildcard
+- 2 combined-risk block rules (OPA-only logic):
+  - `opa_public_unencrypted_s3`: public AND unencrypted S3 together
+  - `opa_production_no_audit`: production + no CloudTrail + no tags
+- 4 warning rules: cloudtrail_disabled, s3_no_encryption, missing_tags, expensive_ec2
+- Validated with `opa check` — no syntax errors
+
+**3. Written `opa-policies/opa_engine.py`** (Python wrapper):
+- `OPAResult` dataclass with `has_blocks()`, `has_warnings()`, `is_empty()`
+- `OPAEngine` class with `is_opa_available()`, `evaluate()`, `report()`
+- Graceful degradation — returns empty result if OPA not installed
+- Full type hints on all functions per AI_RULES.md
+
+**4. Integrated OPA into `cli-wizard/wizard.py`** as Step 6b:
+- Runs after YAML policy engine, before Infracost
+- Blocks deployment on OPA violations, prompts for warnings
+- OPA step is clearly labelled `[opa_*]` in all messages
+
+**5. Written `tests/unit/test_opa_engine.py`** — 31 tests:
+- TestOPAResult (6): data structure correctness
+- TestOPAAvailability (3): mocked subprocess availability
+- TestCleanConfig (3): zero false positives
+- TestBlockRules (4): each individual block rule fires correctly
+- TestCombinedRiskRules (4): OPA-only combined logic verified
+- TestWarningRules (5): each warning rule fires correctly
+- TestGracefulDegradation (2): missing OPA, missing policy file
+- TestReport (4): formatted output correctness
+
+**6. Fixed 3 existing TestMainFlow tests** in `test_wizard.py`:
+- Added `@patch("wizard.step_run_opa_engine")` to the 3 tests that mock main() flow
+
+### Test Results
+✅ **190/190 tests passing** (159 existing + 31 new OPA tests)
+- Coverage: 83.26% (above 80% threshold)
+- Zero regressions
+
+### Files Created/Modified
+- `opa-policies/aws_security.rego` — NEW
+- `opa-policies/opa_engine.py` — NEW
+- `cli-wizard/wizard.py` — MODIFIED (OPA import + step_run_opa_engine + Step 6b in main)
+- `tests/unit/test_opa_engine.py` — NEW
+- `tests/unit/test_wizard.py` — MODIFIED (3 TestMainFlow tests updated)
+- `AI_MASTER.md` — UPDATED (opa-policies/ in structure, phase count)
+- `AI_CONTEXT.md` — UPDATED (OPA engine section, wizard flow diagram)
+- `PROGRESS.md` — UPDATED (Phase 13 marked complete)
+
+---
+
 ## [SESSION-008] Phase 12.5 Role-Based CLI Authentication — COMPLETE
 **Date**: 2026-05-06
 **Agent/Human**: AI Agent (GitHub Copilot)

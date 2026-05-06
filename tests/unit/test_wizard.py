@@ -500,14 +500,17 @@ class TestStepDestroyPrompt:
 class TestMainFlow:
     @patch("wizard.step_confirm_and_deploy", return_value=False)
     @patch("wizard.step_run_infracost", return_value=True)
+    @patch("wizard.step_run_opa_engine")
     @patch("wizard.step_run_policy_engine")
     @patch("wizard.step_generate_tfvars", return_value="/tmp/terraform.tfvars")
     @patch("wizard.step_configure_services")
     @patch("wizard.step_select_template", return_value="static-site")
     @patch("wizard.display_welcome")
     def test_main_template_flow(self, mock_welcome, mock_template, mock_config,
-                                 mock_tfvars, mock_policy, mock_infra, mock_deploy) -> None:
+                                 mock_tfvars, mock_policy, mock_opa,
+                                 mock_infra, mock_deploy) -> None:
         mock_policy.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
+        mock_opa.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
         main()
         mock_welcome.assert_called_once()
         mock_template.assert_called_once()
@@ -515,6 +518,7 @@ class TestMainFlow:
 
     @patch("wizard.step_confirm_and_deploy", return_value=False)
     @patch("wizard.step_run_infracost", return_value=True)
+    @patch("wizard.step_run_opa_engine")
     @patch("wizard.step_run_policy_engine")
     @patch("wizard.step_generate_tfvars", return_value="/tmp/terraform.tfvars")
     @patch("wizard.step_configure_services")
@@ -524,8 +528,9 @@ class TestMainFlow:
     @patch("wizard.display_welcome")
     def test_main_custom_flow(self, mock_welcome, mock_template, mock_services,
                                mock_env, mock_config, mock_tfvars, mock_policy,
-                               mock_infra, mock_deploy) -> None:
+                               mock_opa, mock_infra, mock_deploy) -> None:
         mock_policy.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
+        mock_opa.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
         main()
         mock_services.assert_called_once()
         mock_env.assert_called_once()
@@ -565,6 +570,7 @@ class TestMainFlow:
     @patch("wizard.step_destroy_prompt")
     @patch("wizard.step_confirm_and_deploy", return_value=True)
     @patch("wizard.step_run_infracost", return_value=True)
+    @patch("wizard.step_run_opa_engine")
     @patch("wizard.step_run_policy_engine")
     @patch("wizard.step_generate_tfvars", return_value="/tmp/terraform.tfvars")
     @patch("wizard.step_configure_services")
@@ -572,9 +578,10 @@ class TestMainFlow:
     @patch("wizard.display_welcome")
     def test_main_successful_deploy_shows_destroy_prompt(
         self, mock_welcome, mock_template, mock_config, mock_tfvars,
-        mock_policy, mock_infra, mock_deploy, mock_destroy_prompt
+        mock_policy, mock_opa, mock_infra, mock_deploy, mock_destroy_prompt
     ) -> None:
         mock_policy.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
+        mock_opa.return_value = MagicMock(has_blocks=lambda: False, has_warnings=lambda: False)
         main()
         mock_destroy_prompt.assert_called_once()
 
