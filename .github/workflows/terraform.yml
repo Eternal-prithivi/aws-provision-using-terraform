@@ -32,7 +32,11 @@ jobs:
           terraform_version: "~1.15"
 
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+        # terraform.tfvars is gitignored (contains secrets) so we only
+        # check .tf files. The -check flag exits non-zero if any file
+        # would be reformatted, acting as a CI lint gate.
+        run: |
+          find . -name "*.tf" -not -path "./.terraform/*" | xargs terraform fmt -check
 
       # --- AWS-dependent steps: only run when secrets are configured ---
       - name: Terraform Init
