@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Globe, Server, HardDrive, Lock, Eye, Database,
   ChevronRight, ChevronLeft, Check, Rocket, AlertTriangle,
-  XCircle, Loader2,
+  XCircle, Loader2, Trash2,
 } from "lucide-react";
 import type { ConfigPayload, Template, ValidationResult, CostEstimate } from "@/lib/api";
 import {
@@ -30,7 +30,7 @@ export default function DeployPage() {
   const [config, setConfig] = useState<ConfigPayload>({
     aws_region: "ap-south-1", enable_vpc: false, enable_ec2: false,
     enable_s3: false, enable_iam: false, enable_cloudwatch: false,
-    enable_dynamodb: false, instance_type: "t2.micro", bucket_name: "",
+    enable_dynamodb: false, instance_type: "t2.micro", instance_name: "main-instance", bucket_name: "",
     role_name: "app-role", environment: "free-tier", tags: { project: "aws-provisioner" },
     budget_limit: "1", budget_email: "", dynamodb_table_name: "",
     dynamodb_hash_key: "id", dynamodb_hash_key_type: "S",
@@ -42,6 +42,21 @@ export default function DeployPage() {
   const [deploying, setDeploying] = useState(false);
   const [deployDone, setDeployDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [destroying, setDestroying] = useState(false);
+  const [destroyDone, setDestroyDone] = useState(false);
+  const [destroyOutput, setDestroyOutput] = useState<string[]>([]);
+  const [confirmDestroy, setConfirmDestroy] = useState(false);
+  const [infraStatus, setInfraStatus] = useState<{deployed: boolean; resources: string[]; count: number}>({deployed: false, resources: [], count: 0});
+
+  const checkInfraStatus = async () => {
+    try {
+      const res = await fetch("http://localhost:8000/api/deploy/status");
+      const data = await res.json();
+      setInfraStatus(data);
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { checkInfraStatus(); }, []);
 
   const loadTemplates = useCallback(async () => {
     if (templates.length > 0) return;
@@ -50,7 +65,7 @@ export default function DeployPage() {
 
   const handleNext = async () => {
     if (step === 0) await loadTemplates();
-    if (step === 4) {
+    if (step === 3) {
       setLoading(true);
       try {
         await generateTfvars(config);
@@ -59,7 +74,7 @@ export default function DeployPage() {
       } catch { /* ignore */ }
       setLoading(false);
     }
-    if (step === 5) {
+    if (step === 4) {
       setLoading(true);
       try {
         await generateTfvars(config);
@@ -77,8 +92,24 @@ export default function DeployPage() {
     streamSSE(
       "/api/deploy/apply",
       (line) => setTermOutput((prev) => [...prev, line]),
-      (code) => { setDeploying(false); setDeployDone(true); setTermOutput((prev) => [...prev, `\n>>> Exit code: ${code}`]); },
+      (code) => { setDeploying(false); setDeployDone(true); setTermOutput((prev) => [...prev, `\n>>> Exit code: ${code}`]); if (code === 0) checkInfraStatus(); },
       (err) => { setDeploying(false); setTermOutput((prev) => [...prev, `ERROR: ${err.message}`]); },
+    );
+  };
+
+  const handleDestroy = () => {
+    setDestroying(true);
+    setDestroyOutput([]);
+    setConfirmDestroy(false);
+    streamSSE(
+      "/api/deploy/destroy",
+      (line) => setDestroyOutput((prev) => [...prev, line]),
+      (code) => {
+        setDestroying(false); setDestroyDone(true);
+        setDestroyOutput((prev) => [...prev, `\n>>> Exit code: ${code}`]);
+        if (code === 0) setInfraStatus({deployed: false, resources: [], count: 0});
+      },
+      (err) => { setDestroying(false); setDestroyOutput((prev) => [...prev, `ERROR: ${err.message}`]); },
     );
   };
 
@@ -100,6 +131,64 @@ export default function DeployPage() {
 
   return (
     <div>
+      {/* Active Infrastructure Banner */}
+      {infraStatus.deployed && !destroying && !destroyDone && (
+        <div style={{
+          marginBottom: 24, padding: "16px 20px", borderRadius: "var(--radius-sm)",
+          border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 8px #22c55e" }} />
+            <div>
+              <p style={{ fontWeight: 700, fontSize: "0.9rem", margin: 0 }}>Active Infrastructure</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>{infraStatus.count} resource{infraStatus.count !== 1 ? "s" : ""} deployed</p>
+            </div>
+          </div>
+          {!confirmDestroy ? (
+            <button
+              onClick={() => setConfirmDestroy(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "8px 16px",
+                background: "transparent", border: "1px solid var(--accent-red, #ef4444)",
+                color: "var(--accent-red, #ef4444)", borderRadius: "var(--radius-sm)",
+                cursor: "pointer", fontSize: "0.8rem", fontWeight: 600,
+              }}
+            >
+              <Trash2 size={14} /> Destroy All
+            </button>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={handleDestroy}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "8px 16px",
+                  background: "var(--accent-red, #ef4444)", border: "none",
+                  color: "white", borderRadius: "var(--radius-sm)",
+                  cursor: "pointer", fontSize: "0.8rem", fontWeight: 700,
+                }}
+              >
+                <Trash2 size={14} /> Confirm Destroy
+              </button>
+              <button className="btn-secondary" onClick={() => setConfirmDestroy(false)} style={{ padding: "8px 16px", fontSize: "0.8rem" }}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {(destroying || destroyDone) && !deployDone && (
+        <div style={{ marginBottom: 24 }}>
+          <h4 style={{ fontWeight: 600, marginBottom: 8, color: "var(--accent-red, #ef4444)", display: "flex", alignItems: "center", gap: 8 }}>
+            <Trash2 size={16} /> Destroy Output
+          </h4>
+          <div className="terminal">
+            {destroyOutput.map((line, i) => <div key={i}>{line}</div>)}
+            {destroying && <span className="animate-pulse-glow">▌</span>}
+          </div>
+        </div>
+      )}
+
       {/* Step Indicator */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 32 }}>
         {STEPS.map((s, i) => (
@@ -220,9 +309,14 @@ export default function DeployPage() {
                   </select>
                 </label>
                 {config.enable_ec2 && (
-                  <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Instance Type
-                    <input className="input" value={config.instance_type} onChange={(e) => updateField("instance_type", e.target.value)} style={{ marginTop: 6 }} />
-                  </label>
+                  <>
+                    <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Instance Name
+                      <input className="input" value={(config as Record<string, unknown>).instance_name as string ?? "main-instance"} placeholder="my-web-server" onChange={(e) => updateField("instance_name", e.target.value)} style={{ marginTop: 6 }} />
+                    </label>
+                    <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Instance Type
+                      <input className="input" value={config.instance_type} onChange={(e) => updateField("instance_type", e.target.value)} style={{ marginTop: 6 }} />
+                    </label>
+                  </>
                 )}
                 {config.enable_s3 && (
                   <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Bucket Name
@@ -234,6 +328,9 @@ export default function DeployPage() {
                     <input className="input" value={config.dynamodb_table_name} placeholder="my-table" onChange={(e) => updateField("dynamodb_table_name", e.target.value)} style={{ marginTop: 6 }} />
                   </label>
                 )}
+                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Budget Limit (USD/month)
+                  <input className="input" type="number" min="1" value={config.budget_limit} placeholder="1" onChange={(e) => updateField("budget_limit", e.target.value)} style={{ marginTop: 6 }} />
+                </label>
                 <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Budget Email
                   <input className="input" type="email" value={config.budget_email} placeholder="you@example.com" onChange={(e) => updateField("budget_email", e.target.value)} style={{ marginTop: 6 }} />
                 </label>
@@ -301,6 +398,14 @@ export default function DeployPage() {
                       <tbody>{cost.resources.map((r, i) => <tr key={i}><td>{r.name}</td><td>${r.monthly_cost}</td></tr>)}</tbody>
                     </table>
                   )}
+                  {cost.available && (
+                    <div style={{ marginTop: 16, padding: "12px 16px", background: "var(--accent-blue-glow)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <AlertTriangle size={16} color="var(--accent-amber)" style={{ flexShrink: 0, marginTop: 2 }} />
+                      <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 }}>
+                        <strong style={{ color: "var(--text-primary)" }}>Free Tier Note:</strong> Costs shown are on-demand prices. Actual cost may be <strong>$0.00/month</strong> if your AWS account is within the 12-month Free Tier (e.g. EC2 t2.micro is free for 750 hrs/month). Infracost does not account for Free Tier eligibility.
+                      </p>
+                    </div>
+                  )}
                   {!cost.available && <p style={{ color: "var(--accent-amber)", fontSize: "0.8rem", marginTop: 12 }}>⚠ Infracost not available: {cost.error}</p>}
                 </div>
               ) : (
@@ -333,6 +438,62 @@ export default function DeployPage() {
                 <div className="terminal">
                   {termOutput.map((line, i) => <div key={i}>{line}</div>)}
                   {deploying && <span className="animate-pulse-glow">▌</span>}
+                </div>
+              )}
+
+              {/* Destroy Section */}
+              {deployDone && !destroying && !destroyDone && (
+                <div style={{ marginTop: 32, borderTop: "1px solid var(--border-subtle)", paddingTop: 24 }}>
+                  {!confirmDestroy ? (
+                    <button
+                      onClick={() => setConfirmDestroy(true)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "10px 20px",
+                        background: "transparent", border: "1px solid var(--accent-red, #ef4444)",
+                        color: "var(--accent-red, #ef4444)", borderRadius: "var(--radius-sm)",
+                        cursor: "pointer", fontSize: "0.85rem", fontWeight: 600,
+                      }}
+                    >
+                      <Trash2 size={16} /> Destroy Infrastructure
+                    </button>
+                  ) : (
+                    <div className="glass-card" style={{ padding: 20, border: "1px solid var(--accent-red, #ef4444)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                        <AlertTriangle size={20} color="var(--accent-red, #ef4444)" />
+                        <h4 style={{ fontWeight: 700, color: "var(--accent-red, #ef4444)", margin: 0 }}>Confirm Destroy</h4>
+                      </div>
+                      <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: 16 }}>
+                        This will permanently destroy all deployed AWS resources (VPC, EC2, S3, IAM, etc.). This action cannot be undone.
+                      </p>
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <button
+                          onClick={handleDestroy}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8, padding: "10px 20px",
+                            background: "var(--accent-red, #ef4444)", border: "none",
+                            color: "white", borderRadius: "var(--radius-sm)",
+                            cursor: "pointer", fontSize: "0.85rem", fontWeight: 700,
+                          }}
+                        >
+                          <Trash2 size={16} /> Yes, Destroy Everything
+                        </button>
+                        <button className="btn-secondary" onClick={() => setConfirmDestroy(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {(destroying || destroyDone) && (
+                <div style={{ marginTop: 20 }}>
+                  <h4 style={{ fontWeight: 600, marginBottom: 8, color: "var(--accent-red, #ef4444)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Trash2 size={16} /> Destroy Output
+                  </h4>
+                  <div className="terminal">
+                    {destroyOutput.map((line, i) => <div key={i}>{line}</div>)}
+                    {destroying && <span className="animate-pulse-glow">▌</span>}
+                  </div>
                 </div>
               )}
             </div>

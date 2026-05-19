@@ -16,6 +16,12 @@ variable "instance_id" {
   default     = null
 }
 
+variable "enable_ec2" {
+  description = "Whether EC2 is enabled. CPU alarm is only created when both CloudWatch and EC2 are enabled."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Tags to apply to all resources for cost attribution and governance."
   type        = map(string)

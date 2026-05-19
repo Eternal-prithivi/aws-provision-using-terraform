@@ -29,6 +29,7 @@ module "ec2" {
   enable_ec2    = var.enable_ec2
   instance_type = var.instance_type
   ami_id        = var.ami_id
+  instance_name = var.instance_name
   subnet_id     = module.vpc.public_subnet_id
   vpc_id        = module.vpc.vpc_id
   tags          = var.tags
@@ -55,6 +56,7 @@ module "iam" {
 module "cloudwatch" {
   source            = "./modules/cloudwatch"
   enable_cloudwatch = var.enable_cloudwatch
+  enable_ec2        = var.enable_ec2
   alarm_email       = var.alarm_email
   instance_id       = module.ec2.instance_id
   tags              = var.tags

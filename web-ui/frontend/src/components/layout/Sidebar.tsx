@@ -11,6 +11,8 @@ import {
   Activity,
   CloudCog,
   LogOut,
+  TerminalSquare,
+  Settings,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -20,6 +22,8 @@ const NAV_ITEMS = [
   { href: "/audit", label: "Audit Log", icon: FileText, desc: "Event history" },
   { href: "/team", label: "Team", icon: Users, desc: "Members & roles" },
   { href: "/drift", label: "Drift Detection", icon: Activity, desc: "State monitoring" },
+  { href: "/terminal", label: "CloudShell", icon: TerminalSquare, desc: "Web terminal" },
+  { href: "/settings", label: "Settings", icon: Settings, desc: "Configuration" },
 ];
 
 export default function Sidebar() {
@@ -212,8 +216,8 @@ export default function Sidebar() {
       <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border-subtle)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <p style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Phase 14 • v1.0</p>
-            <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", opacity: 0.6, marginTop: 2 }}>All 14 phases complete</p>
+            <p style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Phase 15 • v1.3</p>
+            <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", opacity: 0.6, marginTop: 2 }}>Custom Policies + Settings</p>
           </div>
           <Link href="/login" style={{ color: "var(--text-muted)", transition: "color 0.2s" }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent-red)"; }}

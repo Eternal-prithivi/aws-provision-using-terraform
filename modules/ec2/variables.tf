@@ -16,6 +16,12 @@ variable "ami_id" {
   default     = ""
 }
 
+variable "instance_name" {
+  description = "Name tag for the EC2 instance."
+  type        = string
+  default     = "main-instance"
+}
+
 variable "subnet_id" {
   description = "Subnet ID to launch the EC2 instance in."
   type        = string

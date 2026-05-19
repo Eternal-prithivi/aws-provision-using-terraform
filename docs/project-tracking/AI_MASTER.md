@@ -70,6 +70,8 @@ For every task:
 | Cost Estimator | tests/unit/test_cost_estimator.py | pytest + unittest.mock |
 | Terraform Commands | tests/integration/test_terraform_commands.py | pytest + unittest.mock |
 | Infracost Integration | tests/integration/test_infracost_integration.py | pytest + unittest.mock |
+| Web Terminal | tests/unit/test_terminal.py | pytest + websocket mock |
+| BYOC Credentials | tests/unit/test_credentials.py | pytest + unittest.mock |
 
 Run tests:
 ```bash
@@ -167,11 +169,17 @@ terraform-project/
 web-ui/
 ├── api/
 │   ├── server.py                   ← FastAPI backend (18 REST endpoints)
+│   ├── terminal.py                 ← WebSocket terminal handler + PTY manager (Phase 16)
+│   ├── terminal_security.py        ← Command allowlist/blocklist engine (Phase 16)
+│   ├── credentials.py              ← BYOC credential vault + validation (Phase 17)
+│   ├── credential_security.py      ← Session-scoped credential encryption (Phase 17)
 │   ├── requirements.txt            ← fastapi, uvicorn, pydantic
 │   └── __init__.py
 └── frontend/                       ← Next.js 16 + Tailwind CSS 4
-    ├── src/app/                    ← 6 pages (dashboard, deploy, policies, audit, team, drift)
-    ├── src/components/layout/      ← Sidebar, TopBar
+     ├── src/app/                    ← 9 pages (dashboard, deploy, policies, audit, team, drift, terminal, settings, login)
+     ├── src/components/layout/      ← Sidebar, TopBar, AuthGuard
+    ├── src/components/Terminal.tsx  ← xterm.js terminal wrapper (Phase 16)
+    ├── src/components/CredentialStatus.tsx ← BYOC status badge (Phase 17)
     ├── src/lib/api.ts              ← typed API client
     └── package.json
 ```
@@ -205,4 +213,4 @@ A task is only done when ALL of the following are true:
 
 ---
 
-*Last updated: 2026-05-06 | Phase 15 in progress*
+*Last updated: 2026-05-15 | Phase 15 complete, Phase 17 planned*

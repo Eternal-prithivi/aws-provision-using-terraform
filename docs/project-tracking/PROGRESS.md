@@ -1,9 +1,9 @@
 # PROGRESS.md — Smart AWS Infrastructure Provisioning System
 
 ## Current Status
-**Active Phase**: ✅ PHASE 14 COMPLETE
-**Overall Progress**: 14 / 14 Phases Complete
-**Last Updated**: 2026-05-06 — Web UI Dashboard complete; all phases finished.
+**Active Phase**: 🔵 PHASE 17 — BYOC (Bring Your Own Credentials)
+**Overall Progress**: 16 / 17 Phases (Phase 15 complete, 17 next)
+**Last Updated**: 2026-05-15 — Phase 15 (UI/UX Polish) completed. 308/308 tests passing.
 
 ---
 
@@ -26,6 +26,9 @@
 | 12.5 | Role-Based CLI Authentication | ✅ Complete | GitHub token verification, role gates, permission checks |
 | 13 | OPA Integration | ✅ Complete | Rego policies, Python wrapper, 31 tests, wizard integrated |
 | 14 | Web UI Dashboard | ✅ Complete | FastAPI backend + Next.js frontend, 6 pages, 26 API tests |
+| 15 | UI/UX Polish & Extended Functionality | ✅ Complete | Custom policies, live notifications, admin settings |
+| 16 | Web Terminal (CloudShell) | ✅ Complete | WebSocket + xterm.js terminal, 31 tests, RBAC-gated |
+| 17 | BYOC (Bring Your Own Credentials) | 🔵 Planned | Users provide their own AWS credentials for deployments |
 
 ---
 
@@ -461,7 +464,7 @@
 
 ---
 
-## 🟢 Current Phase: Phase 15 — UI/UX Polish & Extended Functionality
+## ✅ Phase 15 — UI/UX Polish & Extended Functionality ✅ COMPLETE
 
 ### Phase 15 Goal
 Implement final user-requested features: Drift remediation automation fixes, Admin settings panel, interactive TopBar, and custom policy creation.
@@ -470,9 +473,137 @@ Implement final user-requested features: Drift remediation automation fixes, Adm
 - [x] **Drift Remediation Automation**: Fixed `remediation.py` CLI args to support complete automation (`--apply`), and added "Dry Run Fix" & "Apply Fix" buttons to the Web UI.
 - [x] **Team Admin Operations**: Admins can now delete users and change roles directly from the Team page UI.
 - [x] **Approval Workflow & Slack**: Added an Approvals section in the Team page for admins to approve/reject deployments. Integrated Slack webhook notification logic.
-- [ ] **Custom Policies**: Allow users to create and manage custom policies from the Web UI.
-- [ ] **TopBar Polish**: Make Search and Notifications functional (e.g. show real or mocked notifications, implement global search).
-- [ ] **Admin Settings**: Create an Admin Settings view and move the Logout button to the Settings dropdown.
+- [x] **Custom Policies**: Full CRUD for custom YAML policy rules from the Web UI — add new rules with name, description, severity, and condition; delete custom rules; built-in rules protected from deletion. Visual distinction (Core vs Custom badges).
+- [x] **TopBar Polish**: Live notifications polling from `/api/notifications` (aggregates drift, approvals, audit, policy warnings). Count badge with relative timestamps. Global search navigates to pages and audit logs. ⌘K keyboard shortcut hint.
+- [x] **Admin Settings**: Multi-section settings page with sidebar navigation (Profile, Notifications, Infrastructure, Security, Cost Controls, Session). Live save with visual feedback. Toggle switches for strict mode. Logout button moved to Settings and user dropdown.
+
+### New API Endpoints (Phase 15)
+- `DELETE /api/policies/yaml/{rule_name}` — Delete custom policy (built-in rules protected)
+- `GET /api/notifications` — Aggregated notification feed from drift, approvals, audit, policy health
+- `GET /api/settings` — Get admin settings
+- `POST /api/settings` — Save admin settings (partial update support)
+
+### Implementation Files (Phase 15 additions)
+- `web-ui/api/server.py` — 4 new endpoints (delete policy, notifications, get/save settings)
+- `web-ui/frontend/src/app/policies/page.tsx` — Custom policy CRUD with add/delete, visual badges
+- `web-ui/frontend/src/components/layout/TopBar.tsx` — Live notifications, enhanced search, user dropdown
+- `web-ui/frontend/src/app/settings/page.tsx` — Full admin settings with 6 sections
+- `web-ui/frontend/src/components/layout/Sidebar.tsx` — Settings nav item added
+- `web-ui/frontend/src/lib/api.ts` — 6 new typed API functions
+- `tests/unit/test_server.py` — 15 new tests (custom policies, notifications, settings)
+
+### Test Results
+✅ **308/308 tests passing** (293 existing + 15 new Phase 15 tests)
+- Zero regressions across Phases 1-16
+- Next.js build compiles all 10 routes
+
+### Definition of Done for Phase 15 ✅
+- [x] Custom policy CRUD (add/delete) with built-in rule protection
+- [x] Live notification feed aggregating drift, approvals, audit, policy events
+- [x] Global search navigating to pages and audit logs
+- [x] Admin settings page with 6 configuration sections
+- [x] Logout button in user dropdown and settings page
+- [x] 15 new tests written and passing
+- [x] 308 total tests passing (zero regressions)
+- [x] Next.js build compiles successfully (10 routes)
+- [x] Documentation updated
+
+---
+
+## ✅ Phase 16 — Web Terminal (CloudShell) ✅ COMPLETE
+**Goal**: Provide a browser-based terminal embedded in the Web UI Dashboard, similar to AWS CloudShell, allowing users to execute Terraform commands, AWS CLI commands, and system diagnostics without leaving the dashboard.
+
+### Tasks
+- [x] **16a**: Backend WebSocket endpoint (`/ws/terminal`) for bidirectional terminal communication
+- [x] **16b**: PTY subprocess management — spawn a shell session per authenticated user
+- [x] **16c**: Frontend terminal component using xterm.js (full ANSI color, resize, scrollback)
+- [x] **16d**: Terminal page in Next.js with sidebar integration (`/terminal` route)
+- [x] **16e**: Session management — auto-timeout after inactivity, max concurrent sessions per user
+- [x] **16f**: Security hardening — command allowlist/blocklist, prevent credential leaks in output
+- [x] **16g**: Pre-loaded environment — `terraform`, `aws`, `infracost`, `opa` available in PATH
+- [x] **16h**: Terminal history persistence — store last 100 commands per user session
+- [x] **16i**: Unit tests for WebSocket endpoint, session lifecycle, and security filters (31 tests)
+- [x] **16j**: Documentation update — usage guide, security model, configuration
+
+### Key Features (Implemented)
+- ✅ **xterm.js Frontend**: Full terminal emulation with ANSI colors, copy/paste, resize (JetBrains Mono font, xterm-256color)
+- ✅ **RBAC-Gated**: Only Admin and DevOps roles can access the terminal
+- ✅ **Working Directory**: Terminal opens in the project root with Terraform state access
+- ✅ **Session Timeout**: Auto-disconnect after 30 minutes of inactivity
+- ✅ **Command Guardrails**: 24 blocked patterns (rm -rf, shutdown, fork bomb, etc.)
+- ✅ **Credential Protection**: AWS keys, passwords, and tokens masked in terminal output
+- ✅ **Session Management**: Max 2 concurrent sessions per user, REST API for session listing/kill
+
+### Implementation Files
+- `web-ui/api/terminal.py` — WebSocket handler + PTY manager (280 lines)
+- `web-ui/api/terminal_security.py` — Command allowlist/blocklist engine (175 lines)
+- `web-ui/frontend/src/app/terminal/page.tsx` — Terminal UI page with RBAC gate
+- `web-ui/frontend/src/components/Terminal.tsx` — xterm.js wrapper component
+- `tests/unit/test_terminal.py` — 31 security tests (blocklist, allowlist, credential sanitization)
+
+### Test Results
+✅ **293/293 tests passing** (221 existing + 31 new terminal + 41 previously added)
+- Next.js build compiles all 10 routes including `/terminal`
+
+### Definition of Done for Phase 16 ✅
+- [x] WebSocket terminal endpoint functional with PTY subprocess
+- [x] xterm.js frontend renders a fully interactive shell
+- [x] RBAC enforced — Viewer and Developer roles see "Access Denied"
+- [x] Command blocklist prevents destructive operations (24 patterns)
+- [x] Session timeout and cleanup implemented
+- [x] Credential sanitization masks AWS keys in output
+- [x] Terraform, AWS CLI, Infracost, and OPA available in terminal PATH
+- [x] 31 unit tests written and passing
+- [x] Documentation updated
+
+---
+
+## 🔵 Phase 17 — BYOC (Bring Your Own Credentials)
+**Goal**: Allow users to provide their own AWS Access Key and Secret Key for deployments, replacing the current single-credential model. This enables multi-tenant usage where each user deploys to their own AWS account.
+
+### Tasks
+- [ ] **17a**: Backend credential vault — encrypted in-memory credential store (per-session, never persisted to disk)
+- [ ] **17b**: API endpoint `POST /api/credentials` to accept and validate AWS credentials
+- [ ] **17c**: Credential validation — call `aws sts get-caller-identity` to verify credentials before use
+- [ ] **17d**: Credential injection — set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as environment variables for Terraform subprocess calls
+- [ ] **17e**: Frontend "Cloud Credentials" settings page with secure input form
+- [ ] **17f**: Credential status indicator in TopBar (connected/disconnected badge)
+- [ ] **17g**: Credential rotation support — users can update credentials without restarting
+- [ ] **17h**: Session isolation — ensure one user's credentials never leak to another user's session
+- [ ] **17i**: Fallback mode — if no BYOC credentials provided, fall back to server-configured credentials (current behavior)
+- [ ] **17j**: Security audit — credentials never logged, never written to disk, never returned in API responses
+- [ ] **17k**: Unit tests for credential validation, injection, isolation, and cleanup
+- [ ] **17l**: Documentation update — BYOC setup guide, security model, FAQ
+
+### Key Features (Planned)
+- 🔐 **Zero-Persistence**: Credentials exist only in memory for the duration of the session
+- ✅ **Pre-Validation**: `sts:GetCallerIdentity` verifies credentials before any Terraform operation
+- 🔄 **Hot Swap**: Users can change credentials mid-session without restarting the server
+- 🛡️ **Session Isolation**: Each user's credentials are scoped to their authenticated session only
+- 📊 **Account Info Display**: Shows AWS Account ID, IAM user/role, and region after connection
+- ⚡ **Fallback Mode**: Server-level credentials used when no BYOC credentials are provided
+- 🚫 **No Logging**: Credentials are never written to logs, audit trail, or disk
+
+### Implementation Files (Planned)
+- `web-ui/api/credentials.py` — Credential vault, validation, and injection logic
+- `web-ui/api/credential_security.py` — Encryption helpers, session-scoped storage
+- `web-ui/frontend/src/app/settings/credentials/page.tsx` — BYOC credentials UI
+- `web-ui/frontend/src/components/CredentialStatus.tsx` — TopBar credential badge
+- `tests/unit/test_credentials.py` — Credential lifecycle tests
+- `tests/unit/test_credential_security.py` — Isolation and cleanup tests
+
+### Definition of Done for Phase 17
+- [ ] Users can input AWS credentials via the Web UI
+- [ ] Credentials validated against AWS STS before use
+- [ ] Terraform commands use BYOC credentials when provided
+- [ ] Credentials never persisted to disk or logged
+- [ ] Session isolation prevents credential leaks between users
+- [ ] Fallback to server credentials when no BYOC provided
+- [ ] Credential status visible in TopBar
+- [ ] Unit tests written and passing
+- [ ] Documentation updated with BYOC setup guide
+
+---
 
 ## Completed Tasks Archive
 

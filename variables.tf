@@ -101,6 +101,12 @@ variable "ami_id" {
   default     = ""
 }
 
+variable "instance_name" {
+  description = "Name tag for the EC2 instance."
+  type        = string
+  default     = "main-instance"
+}
+
 # --- S3 ---
 variable "bucket_name" {
   description = "Name for the S3 bucket. Must be globally unique."

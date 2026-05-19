@@ -27,6 +27,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+# ─── Terminal Router (Phase 16) ───
+from terminal import terminal_router
+
 # ─── Add project paths so we can import existing modules ───
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "policy-engine"))
@@ -55,6 +58,7 @@ class ConfigPayload(BaseModel):
     enable_dynamodb: bool = False
     vpc_cidr: str = "10.0.0.0/16"
     instance_type: str = "t2.micro"
+    instance_name: str = "main-instance"
     ami_id: str = ""
     bucket_name: str = ""
     role_name: str = "app-role"
@@ -96,6 +100,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── Mount Terminal Router (Phase 16 — CloudShell) ───
+app.include_router(terminal_router)
 
 
 # ─── Auth Models ───
@@ -211,6 +218,22 @@ def _get_audit_logger() -> AuditLogger:
     return AuditLogger()
 
 
+def _audit_log(action: str, status: str, details: dict[str, Any] | None = None, environment: str = "free-tier") -> None:
+    """Convenience helper to log an audit event."""
+    try:
+        logger = _get_audit_logger()
+        logger.log_event(
+            action=action,
+            actor="web-ui",
+            environment=environment,
+            deployment_id=f"web-{int(__import__('time').time())}",
+            status=status,
+            details=details or {},
+        )
+    except Exception:
+        pass  # Never let audit logging break the main flow
+
+
 def _config_to_policy_dict(config: ConfigPayload) -> dict[str, Any]:
     """Convert a ConfigPayload to the dict format expected by policy engines."""
     return {
@@ -223,6 +246,13 @@ def _config_to_policy_dict(config: ConfigPayload) -> dict[str, Any]:
         "tags": config.tags if config.tags else {},
         "cloudtrail_enabled": config.environment == "production",
         "environment": config.environment,
+        "enable_s3": config.enable_s3,
+        "bucket_name": config.bucket_name,
+        "budget_limit": config.budget_limit,
+        "enable_cloudwatch": config.enable_cloudwatch,
+        "enable_ec2": config.enable_ec2,
+        "vpc_cidr": config.vpc_cidr,
+        "enable_vpc": config.enable_vpc,
     }
 
 
@@ -240,6 +270,7 @@ def _config_to_tfvars(config: ConfigPayload) -> str:
         "",
         f'vpc_cidr      = "{config.vpc_cidr}"',
         f'instance_type = "{config.instance_type}"',
+        f'instance_name = "{config.instance_name}"',
         f'ami_id        = "{config.ami_id}"',
         f'bucket_name   = "{config.bucket_name}"',
         f'dynamodb_table_name = "{config.dynamodb_table_name}"',
@@ -273,8 +304,11 @@ def _serialize_violation(v: Violation) -> dict[str, str]:
     }
 
 
-async def _stream_terraform_command(command: list[str]) -> Any:
+async def _stream_terraform_command(command: list[str], audit_action: str = "") -> Any:
     """Stream terraform command output as Server-Sent Events."""
+    if audit_action:
+        _audit_log(audit_action, "started", {"command": " ".join(command)})
+
     process = await asyncio.create_subprocess_exec(
         *command,
         stdout=asyncio.subprocess.PIPE,
@@ -292,6 +326,12 @@ async def _stream_terraform_command(command: list[str]) -> Any:
             yield f"data: {json.dumps({'line': text})}\n\n"
 
         return_code = await process.wait()
+        if audit_action:
+            _audit_log(
+                audit_action,
+                "success" if return_code == 0 else "failed",
+                {"command": " ".join(command), "exit_code": return_code},
+            )
         yield f"data: {json.dumps({'done': True, 'exit_code': return_code})}\n\n"
 
     return StreamingResponse(
@@ -432,7 +472,7 @@ async def get_templates() -> list[dict[str, Any]]:
 
 @app.post("/api/config/validate")
 async def validate_config(config: ConfigPayload) -> dict[str, Any]:
-    """Run both YAML and OPA policy engines on a config."""
+    """Validate config against policy engines."""
     policy_dict = _config_to_policy_dict(config)
 
     # YAML engine
@@ -462,13 +502,16 @@ async def validate_config(config: ConfigPayload) -> dict[str, Any]:
     total_blocks = len(yaml_result["blocks"]) + len(opa_result_dict["blocks"])
     total_warnings = len(yaml_result["warnings"]) + len(opa_result_dict["warnings"])
 
+    can_deploy = total_blocks == 0
+    _audit_log("policy_check", "success" if can_deploy else "blocked", {"blocks": total_blocks, "warnings": total_warnings})
+
     return {
         "yaml": yaml_result,
         "opa": opa_result_dict,
         "summary": {
             "total_blocks": total_blocks,
             "total_warnings": total_warnings,
-            "can_deploy": total_blocks == 0,
+            "can_deploy": can_deploy,
         },
     }
 
@@ -481,6 +524,9 @@ async def generate_tfvars(config: ConfigPayload) -> dict[str, str]:
     # Also write to disk
     tfvars_path = PROJECT_ROOT / "terraform.tfvars"
     tfvars_path.write_text(tfvars_content, encoding="utf-8")
+
+    services = [s for s in ["vpc","ec2","s3","iam","cloudwatch","dynamodb"] if getattr(config, f"enable_{s}", False)]
+    _audit_log("generate_tfvars", "success", {"services": services, "region": config.aws_region}, config.environment)
 
     return {"tfvars": tfvars_content, "path": str(tfvars_path)}
 
@@ -534,22 +580,42 @@ async def cost_estimate() -> dict[str, Any]:
         return {"available": False, "error": str(e)}
 
 
+@app.get("/api/deploy/status")
+async def deploy_status() -> dict[str, Any]:
+    """Check if any infrastructure is currently deployed by reading tfstate."""
+    try:
+        state_path = PROJECT_ROOT / "terraform.tfstate"
+        if not state_path.exists():
+            return {"deployed": False, "resources": [], "count": 0}
+
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        resources = []
+        for res in state.get("resources", []):
+            if res.get("mode") == "managed":
+                name = f"{res.get('module', '')}.{res['type']}.{res['name']}".lstrip(".")
+                resources.append(name)
+
+        return {"deployed": len(resources) > 0, "resources": resources, "count": len(resources)}
+    except Exception:
+        return {"deployed": False, "resources": [], "count": 0}
+
+
 @app.post("/api/deploy/plan")
 async def deploy_plan() -> Any:
     """Run terraform plan and stream output via SSE."""
-    return await _stream_terraform_command(["terraform", "plan", "-input=false", "-no-color"])
+    return await _stream_terraform_command(["terraform", "plan", "-input=false", "-no-color"], audit_action="deploy_plan")
 
 
 @app.post("/api/deploy/apply")
 async def deploy_apply() -> Any:
     """Run terraform apply and stream output via SSE."""
-    return await _stream_terraform_command(["terraform", "apply", "-auto-approve", "-input=false", "-no-color"])
+    return await _stream_terraform_command(["terraform", "apply", "-auto-approve", "-input=false", "-no-color"], audit_action="deploy_apply")
 
 
 @app.post("/api/deploy/destroy")
 async def deploy_destroy() -> Any:
     """Run terraform destroy and stream output via SSE."""
-    return await _stream_terraform_command(["terraform", "destroy", "-auto-approve", "-input=false", "-no-color"])
+    return await _stream_terraform_command(["terraform", "destroy", "-auto-approve", "-input=false", "-no-color"], audit_action="deploy_destroy")
 
 
 # ── Policy Engine ──
@@ -616,6 +682,46 @@ async def add_yaml_policy(payload: CustomPolicyPayload) -> dict[str, Any]:
         _policy_engine = None
         
         return {"success": True, "message": f"Rule '{payload.name}' added successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/policies/yaml/{rule_name}")
+async def delete_yaml_policy(rule_name: str) -> dict[str, Any]:
+    """Delete a custom policy rule from rules.yaml."""
+    import yaml
+
+    # Protected built-in rules that cannot be deleted
+    builtin_rules = {
+        "public_s3_bucket", "open_ssh_port", "open_rdp_port",
+        "iam_wildcard_permissions", "expensive_ec2_instance",
+        "missing_s3_encryption", "missing_resource_tags", "cloudtrail_disabled",
+    }
+    if rule_name in builtin_rules:
+        raise HTTPException(status_code=403, detail=f"Cannot delete built-in rule '{rule_name}'")
+
+    try:
+        rules_path = PROJECT_ROOT / "policy-engine" / "rules.yaml"
+        if not rules_path.exists():
+            raise HTTPException(status_code=404, detail="rules.yaml not found")
+
+        with open(rules_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        rules_list = data.get("rules", [])
+        new_rules = [r for r in rules_list if r.get("name") != rule_name]
+
+        if len(new_rules) == len(rules_list):
+            raise HTTPException(status_code=404, detail=f"Rule '{rule_name}' not found")
+
+        data["rules"] = new_rules
+
+        with open(rules_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False)
+
+        return {"success": True, "message": f"Rule '{rule_name}' deleted successfully"}
     except HTTPException:
         raise
     except Exception as e:
@@ -813,6 +919,8 @@ async def add_team_user(payload: AddUserPayload) -> dict[str, Any]:
         engine.save_config()
         engine._load_config()  # Reload to update in-memory state
 
+        _audit_log("add_team_member", "success", {"username": payload.github_username, "role": payload.role, "team": payload.team})
+
         return {"success": True, "user": member_entry}
     except HTTPException:
         raise
@@ -860,7 +968,7 @@ async def get_drift_status() -> dict[str, Any]:
 async def trigger_drift_scan() -> Any:
     """Trigger drift detection script and stream output via SSE."""
     detect_script = str(PROJECT_ROOT / "drift-detection" / "detect.sh")
-    return await _stream_terraform_command(["bash", detect_script])
+    return await _stream_terraform_command(["bash", detect_script], audit_action="drift_scan")
 
 
 @app.post("/api/drift/remediate")
@@ -879,6 +987,7 @@ async def trigger_drift_remediation(
             check_only=check_only,
             auto_approve=auto_approve,
         )
+        _audit_log("drift_remediation", "success" if result.success else "failed", {"check_only": check_only, "performed": result.performed})
         return {
             "success": result.success,
             "performed": result.performed,
@@ -886,6 +995,7 @@ async def trigger_drift_remediation(
             "report_path": str(result.report_path),
         }
     except Exception as e:
+        _audit_log("drift_remediation", "failed", {"error": str(e)})
         return {"success": False, "performed": False, "message": str(e), "report_path": ""}
 
 
@@ -923,6 +1033,8 @@ async def delete_team_user(username: str) -> dict[str, Any]:
 
         engine.save_config()
         engine._load_config()  # Reload to reflect changes
+
+        _audit_log("remove_team_member", "success", {"username": username})
 
         return {"success": True, "message": f"User '{username}' removed successfully"}
     except HTTPException:
@@ -1118,6 +1230,144 @@ def _send_slack_notification(message: str) -> str | None:
         return webhook_url if resp.status_code == 200 else None
     except Exception:
         return None
+
+
+# ═══════════════════════════════════════════════════════════
+# Notifications (Live Feed)
+# ═══════════════════════════════════════════════════════════
+
+
+@app.get("/api/notifications")
+async def get_notifications() -> dict[str, Any]:
+    """Aggregate notifications from drift status, approvals, and recent audit events."""
+    from datetime import datetime, timezone
+
+    notifications: list[dict[str, Any]] = []
+
+    # 1. Pending approval requests
+    pending = [r for r in _approval_queue if r["status"] == "pending"]
+    for req in pending:
+        notifications.append({
+            "id": f"approval-{req['request_id']}",
+            "type": "approval",
+            "title": "Approval Pending",
+            "message": f"{req['requester']} requests {req['environment']} deployment",
+            "severity": "info",
+            "timestamp": req.get("created_at", ""),
+            "action_url": "/team",
+        })
+
+    # 2. Drift status
+    drift_report_path = PROJECT_ROOT / "drift-report.txt"
+    if drift_report_path.exists():
+        drift_text = drift_report_path.read_text(encoding="utf-8")
+        if "DRIFT DETECTED" in drift_text.upper():
+            notifications.append({
+                "id": "drift-alert",
+                "type": "drift",
+                "title": "Drift Detected",
+                "message": "Infrastructure state has diverged from Terraform config",
+                "severity": "warning",
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "action_url": "/drift",
+            })
+
+    # 3. Recent audit events (last 3)
+    try:
+        logger = _get_audit_logger()
+        events = logger.read_events(limit=3)
+        for e in events:
+            notifications.append({
+                "id": f"audit-{e.event_id}",
+                "type": "audit",
+                "title": f"{e.action.replace('_', ' ').title()}",
+                "message": f"{e.actor} — {e.environment} ({e.status})",
+                "severity": "error" if e.status == "failed" else "success",
+                "timestamp": e.timestamp,
+                "action_url": "/audit",
+            })
+    except Exception:
+        pass
+
+    # 4. Policy health warning
+    try:
+        pe = _get_policy_engine()
+        policy_dict = _config_to_policy_dict(ConfigPayload())
+        result = pe.evaluate(policy_dict)
+        if result.has_warnings():
+            notifications.append({
+                "id": "policy-warnings",
+                "type": "policy",
+                "title": "Policy Warnings",
+                "message": f"{len(result.warnings)} warning(s) on default config",
+                "severity": "warning",
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "action_url": "/policies",
+            })
+    except Exception:
+        pass
+
+    # Sort by timestamp descending
+    notifications.sort(key=lambda n: n.get("timestamp", ""), reverse=True)
+
+    return {
+        "notifications": notifications,
+        "total": len(notifications),
+        "unread": len(notifications),  # All treated as unread for simplicity
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# Admin Settings
+# ═══════════════════════════════════════════════════════════
+
+# In-memory settings (resets on server restart — fine for local-first tool)
+_admin_settings: dict[str, Any] = {
+    "slack_webhook_url": "",
+    "default_region": "ap-south-1",
+    "strict_mode": False,
+    "cost_alert_threshold": 1.0,
+    "session_timeout_minutes": 30,
+}
+
+
+class AdminSettingsPayload(BaseModel):
+    """Payload for saving admin settings."""
+
+    slack_webhook_url: str | None = None
+    default_region: str | None = None
+    strict_mode: bool | None = None
+    cost_alert_threshold: float | None = None
+    session_timeout_minutes: int | None = None
+
+
+@app.get("/api/settings")
+async def get_settings() -> dict[str, Any]:
+    """Return current admin settings."""
+    return {"settings": _admin_settings}
+
+
+@app.post("/api/settings")
+async def save_settings(payload: AdminSettingsPayload) -> dict[str, Any]:
+    """Save admin settings (in-memory)."""
+    updated_fields: list[str] = []
+    if payload.slack_webhook_url is not None:
+        _admin_settings["slack_webhook_url"] = payload.slack_webhook_url
+        updated_fields.append("slack_webhook_url")
+    if payload.default_region is not None:
+        _admin_settings["default_region"] = payload.default_region
+        updated_fields.append("default_region")
+    if payload.strict_mode is not None:
+        _admin_settings["strict_mode"] = payload.strict_mode
+        updated_fields.append("strict_mode")
+    if payload.cost_alert_threshold is not None:
+        _admin_settings["cost_alert_threshold"] = payload.cost_alert_threshold
+        updated_fields.append("cost_alert_threshold")
+    if payload.session_timeout_minutes is not None:
+        _admin_settings["session_timeout_minutes"] = payload.session_timeout_minutes
+        updated_fields.append("session_timeout_minutes")
+
+    return {"success": True, "updated": updated_fields, "settings": _admin_settings}
 
 
 # ═══════════════════════════════════════════════════════════

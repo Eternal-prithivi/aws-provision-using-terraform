@@ -16,9 +16,13 @@
 - **Approval Workflows & Slack Integration** — Deployment requests are routed to an approval queue with real-time Slack webhook notifications.
 - **Cost Estimation** — Infracost integration shows monthly costs before you deploy.
 - **Drift Detection & Remediation** — Daily GitHub Actions job detects unauthorized changes. "Dry Run" and "Apply" fixes can be triggered directly from the Web UI.
+- **Web Terminal (CloudShell)** — Browser-based terminal using xterm.js + WebSocket. Run Terraform, AWS CLI, and Infracost commands directly from the dashboard. RBAC-gated with command blocklist and credential masking.
 - **Free-Tier Safe** — Default configuration stays within AWS Free Tier ($0/month).
 - **Modular Architecture** — 7 independent Terraform modules (VPC, EC2, S3, IAM, CloudWatch, Billing, DynamoDB).
-- **221 Tests** — Extensive coverage for policy engines, API endpoints, team collaboration, and deployment flows.
+- **293 Tests** — Extensive coverage for policy engines, API endpoints, terminal security, team collaboration, and deployment flows.
+
+### Coming Soon
+- **BYOC (Bring Your Own Credentials)** — Phase 17: Users connect their own AWS accounts for multi-tenant deployments.
 
 ## Documentation
 
@@ -33,8 +37,11 @@ Project-facing documentation lives in the [`docs/`](docs) folder:
 
 ## Roadmap
 
-**Project Complete: Phases 1-15 successfully delivered.**
-All core CLI features, multi-user collaboration, OPA integration, and the full-stack Web UI Dashboard (FastAPI + Next.js) have been implemented.
+**Project Complete: Phases 1-16 successfully delivered.**
+All core CLI features, multi-user collaboration, OPA integration, the full-stack Web UI Dashboard (FastAPI + Next.js), and the CloudShell web terminal have been implemented.
+
+**Upcoming Phase:**
+- **Phase 17 — BYOC (Bring Your Own Credentials)**: Users provide their own AWS Access Key and Secret Key. Zero-persistence credential vault with STS validation and session isolation.
 
 ---
 

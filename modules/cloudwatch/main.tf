@@ -15,7 +15,7 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  count               = var.enable_cloudwatch && var.instance_id != null ? 1 : 0
+  count               = var.enable_cloudwatch && var.enable_ec2 ? 1 : 0
   alarm_name          = "ec2-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2

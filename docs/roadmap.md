@@ -1,6 +1,6 @@
 # Roadmap
 
-## Completed Core Phases
+## Completed Phases
 
 - Phase 1: Foundation Setup
 - Phase 2: Policy and Risk Engine
@@ -13,12 +13,27 @@
 - Phase 9: Templates and Documentation
 - Phase 10: Serverless Database Expansion (DynamoDB)
 - Phase 11: Drift Remediation
+- Phase 12: Multi-User Collaboration (RBAC, approval workflows, audit trail)
+- Phase 12.5: Role-Based CLI Authentication (GitHub token auth)
+- Phase 13: OPA Integration (Rego policies, Python wrapper)
+- Phase 14: Web UI Dashboard (FastAPI + Next.js, 7 pages)
+- Phase 16: Web Terminal / CloudShell (WebSocket + xterm.js, 31 tests, RBAC-gated)
+
+## In Progress
+
+- Phase 15: UI/UX Polish & Extended Functionality
 
 ## Planned Phases
 
-1. Multi-user/team collaboration
-2. OPA integration
-3. Web UI dashboard
+- **Phase 17: BYOC (Bring Your Own Credentials)** — Multi-tenant AWS credential management. Users provide their own AWS Access Key and Secret Key for deployments. Credentials stored in-memory only (zero-persistence), validated via STS, with session isolation.
+
+## Future Considerations
+
+- Multi-region deployment support
+- Container orchestration (ECS/EKS modules)
+- Cost anomaly ML detection
+- SSO authentication (SAML/OIDC)
+- Multi-cloud provider support (Azure/GCP)
 
 ## Notes
 

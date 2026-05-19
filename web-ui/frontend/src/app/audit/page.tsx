@@ -131,7 +131,7 @@ function AuditContent() {
                     <td>{e.actor}</td>
                     <td><span className={`badge ${e.environment === "production" ? "badge-block" : "badge-success"}`}>{e.environment}</span></td>
                     <td><span className={`badge ${e.status === "success" ? "badge-success" : e.status === "failed" ? "badge-block" : "badge-warning"}`}>{e.status}</span></td>
-                    <td style={{ fontSize: "0.8rem", color: "var(--text-muted)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{e.details ?? "—"}</td>
+                    <td style={{ fontSize: "0.8rem", color: "var(--text-muted)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{e.details && typeof e.details === "object" ? JSON.stringify(e.details) : (e.details ?? "—")}</td>
                   </tr>
                 ))}
               </tbody>

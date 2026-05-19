@@ -212,10 +212,40 @@ export const fetchCostEstimate = () => post<CostEstimate>("/api/cost-estimate");
 export const fetchYamlPolicies = () => get<{ rules: PolicyRule[]; count: number }>("/api/policies/yaml");
 export const addCustomPolicy = (payload: { name: string; description: string; severity: string; condition: string }) =>
   post<{ success: boolean; message: string }>("/api/policies/yaml", payload);
+export const deleteCustomPolicy = (ruleName: string) =>
+  del<{ success: boolean; message: string }>(`/api/policies/yaml/${ruleName}`);
 export const fetchOpaPolicies = () =>
   get<{ rules: PolicyRule[]; count: number; opa_available: boolean }>("/api/policies/opa");
 export const evaluatePolicies = (config: ConfigPayload) =>
   post<ValidationResult>("/api/policies/evaluate", config);
+
+// Notifications
+export interface Notification {
+  id: string;
+  type: "approval" | "drift" | "audit" | "policy";
+  title: string;
+  message: string;
+  severity: "info" | "warning" | "error" | "success";
+  timestamp: string;
+  action_url: string;
+}
+
+export const fetchNotifications = () =>
+  get<{ notifications: Notification[]; total: number; unread: number }>("/api/notifications");
+
+// Admin Settings
+export interface AdminSettings {
+  slack_webhook_url: string;
+  default_region: string;
+  strict_mode: boolean;
+  cost_alert_threshold: number;
+  session_timeout_minutes: number;
+}
+
+export const fetchSettings = () =>
+  get<{ settings: AdminSettings }>("/api/settings");
+export const saveSettings = (payload: Partial<AdminSettings>) =>
+  post<{ success: boolean; updated: string[]; settings: AdminSettings }>("/api/settings", payload);
 
 // Audit
 export const fetchAuditEvents = (params?: {

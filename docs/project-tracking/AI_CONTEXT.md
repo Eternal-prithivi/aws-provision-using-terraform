@@ -28,17 +28,25 @@ Automate AWS infrastructure setup while reducing human error, preventing unneces
 ```
 User
  │
- ▼
-CLI Wizard (wizard.py)
+ ├──► Web UI Dashboard (Next.js + FastAPI)
+ │         ├── Deploy Wizard, Policy Dashboard, Audit Log
+ │         ├── Drift Detection, Team Management
+ │         ├── Web Terminal / CloudShell (Phase 16)
+ │         └── BYOC Credential Management (Phase 17)
+ │
+ ├──► CLI Wizard (wizard.py)
  │
  ├──► Policy & Risk Engine (engine.py + rules.yaml)
  │         └── 8 rules: block or warn before deploy
+ │
+ ├──► OPA Engine (opa_engine.py + aws_security.rego)
+ │         └── Combinatorial Rego policies (10 rules)
  │
  ├──► Infracost (infracost breakdown --path .)
  │         └── monthly cost estimate per resource
  │
  ├──► terraform init → terraform apply
- │         └── provisions AWS via modules
+ │         └── provisions AWS via modules (user's own credentials if BYOC)
  │
  └──► Outputs displayed (EC2 IP, S3 bucket name, etc.)
 
@@ -320,15 +328,80 @@ This project is:
 
 When integrating later: this system becomes the "Infrastructure Provisioner" module feeding cost and drift data into the optimizer's dashboard.
 
-## Future Enhancements Roadmap
+## Web Terminal / CloudShell (Phase 16) ✅ COMPLETE
 
-Phase 11 — drift remediation is now implemented.
+**WebSocket Endpoint**: `ws://localhost:8000/ws/terminal`
+**Frontend Route**: `/terminal`
+**Status**: Fully implemented and tested (31 tests)
 
-The next planned phases, in order, are:
-1. Multi-user/team collaboration — add shared workflows for team usage.
-2. OPA integration — strengthen policy enforcement with Open Policy Agent.
-3. Web UI dashboard — provide a visual interface for easier interaction.
+Provides a browser-based terminal embedded in the dashboard, similar to AWS CloudShell.
+
+### Architecture
+```
+Browser (xterm.js)  ←→  WebSocket  ←→  FastAPI  ←→  PTY subprocess (zsh)
+```
+
+### Security Model (Implemented)
+- **RBAC-Gated**: Only Admin and DevOps roles can access
+- **Command Blocklist**: 24 blocked patterns (rm -rf, shutdown, fork bomb, sudo su, etc.)
+- **Credential Protection**: AWS keys, passwords, tokens auto-masked in output
+- **Session Timeout**: Auto-disconnect after 30 minutes of inactivity
+- **Session Limits**: Max 5 concurrent sessions per user, dead session auto-cleanup
+
+### Implementation Files
+- `web-ui/api/terminal.py` — WebSocket handler + PTY manager (370 lines)
+- `web-ui/api/terminal_security.py` — Command blocklist + credential sanitizer (175 lines)
+- `web-ui/frontend/src/components/Terminal.tsx` — xterm.js wrapper (315 lines)
+- `web-ui/frontend/src/app/terminal/page.tsx` — Terminal page with RBAC gate
+- `tests/unit/test_terminal.py` — 31 tests (blocklist, allowlist, credential masking)
+
+### Pre-loaded Tools
+- `terraform`, `aws`, `infracost`, `opa` available in PATH
+- Working directory set to project root
+- xterm-256color with JetBrains Mono font
 
 ---
 
-*This file should be updated as architecture evolves. Update folder structure section after Phase 3.*
+## BYOC — Bring Your Own Credentials (Phase 17)
+
+**API Endpoint**: `POST /api/credentials`
+**Frontend Route**: `/settings/credentials`
+
+Allows users to provide their own AWS Access Key and Secret Key for deployments.
+
+### Credential Lifecycle
+```
+User submits credentials via UI
+  │
+  ├── Validate: aws sts get-caller-identity
+  ├── Store: encrypted in-memory only (per-session)
+  ├── Inject: set as env vars for Terraform subprocess
+  └── Cleanup: credentials wiped on session end
+```
+
+### Security Model
+- **Zero-Persistence**: Credentials exist only in memory, never written to disk
+- **Session Isolation**: Each user's credentials scoped to their session
+- **No Logging**: Credentials never appear in logs, audit trail, or API responses
+- **Pre-Validation**: STS call verifies credentials before any Terraform operation
+- **Fallback Mode**: Server-level credentials used when no BYOC provided
+
+---
+
+## Future Enhancements Roadmap
+
+Phases 1-16 are complete. Phase 15 polish is ongoing.
+
+The next planned phase is:
+1. **Phase 17 — BYOC (Bring Your Own Credentials)** — Multi-tenant AWS credential management
+
+Future considerations (unplanned):
+- Multi-region deployment support
+- Container orchestration (ECS/EKS modules)
+- Cost anomaly ML detection
+- SSO authentication (SAML/OIDC)
+- Multi-cloud provider support (Azure/GCP)
+
+---
+
+*This file should be updated as architecture evolves. Last updated: 2026-05-15 — Phase 15 complete.*

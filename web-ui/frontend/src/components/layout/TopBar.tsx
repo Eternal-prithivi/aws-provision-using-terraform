@@ -1,8 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, Search, Settings, LogOut, User as UserIcon } from "lucide-react";
+import {
+  Bell, Search, Settings, LogOut, User as UserIcon,
+  Activity, ShieldCheck, FileText, CheckCircle, AlertTriangle, XCircle,
+  ExternalLink,
+} from "lucide-react";
+import type { Notification } from "@/lib/api";
+import { fetchNotifications } from "@/lib/api";
 
 const PAGE_TITLES: Record<string, { title: string; desc: string }> = {
   "/": { title: "Dashboard", desc: "Infrastructure overview at a glance" },
@@ -11,6 +17,22 @@ const PAGE_TITLES: Record<string, { title: string; desc: string }> = {
   "/audit": { title: "Audit Log", desc: "Deployment history and events" },
   "/team": { title: "Team Management", desc: "Users, roles, and permissions" },
   "/drift": { title: "Drift Detection", desc: "Infrastructure state monitoring" },
+  "/terminal": { title: "CloudShell", desc: "Browser-based terminal" },
+  "/settings": { title: "Settings", desc: "Admin configuration" },
+};
+
+const NOTIFICATION_ICONS: Record<string, typeof Bell> = {
+  approval: CheckCircle,
+  drift: Activity,
+  audit: FileText,
+  policy: ShieldCheck,
+};
+
+const SEVERITY_COLORS: Record<string, string> = {
+  info: "var(--accent-blue)",
+  warning: "var(--accent-amber)",
+  error: "var(--accent-red)",
+  success: "var(--accent-green)",
 };
 
 export default function TopBar() {
@@ -21,6 +43,8 @@ export default function TopBar() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [user, setUser] = useState<{ name?: string; username?: string; role?: string } | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
     try {
@@ -29,15 +53,30 @@ export default function TopBar() {
     } catch {}
   }, [pathname]);
 
+  // Fetch live notifications
+  const loadNotifications = useCallback(() => {
+    fetchNotifications()
+      .then((data) => {
+        setNotifications(data.notifications);
+        setNotifCount(data.unread);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
+
   if (pathname === "/login") return null;
 
   const page = PAGE_TITLES[pathname] ?? { title: "Dashboard", desc: "" };
 
   const searchResults = Object.entries(PAGE_TITLES)
-    .filter(([path, data]) => 
+    .filter(([, data]) => 
       data.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      data.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      path.toLowerCase().includes(searchQuery.toLowerCase())
+      data.desc.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .map(([path, data]) => ({ path, ...data }));
 
@@ -56,6 +95,26 @@ export default function TopBar() {
   const handleLogout = () => {
     sessionStorage.removeItem("auth_user");
     router.push("/login");
+  };
+
+  const handleNotificationClick = (n: Notification) => {
+    router.push(n.action_url);
+    setShowNotifications(false);
+  };
+
+  const formatTime = (ts: string) => {
+    if (!ts) return "";
+    try {
+      const d = new Date(ts);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1) return "just now";
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}h ago`;
+      return d.toLocaleDateString();
+    } catch { return ""; }
   };
 
   return (
@@ -95,7 +154,8 @@ export default function TopBar() {
           }}>
             <Search size={14} color="var(--text-muted)" />
             <input
-              placeholder="Search pages or audit logs..."
+              id="topbar-search"
+              placeholder="Search pages, audit logs..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -110,6 +170,11 @@ export default function TopBar() {
                 fontFamily: "var(--font-sans)",
               }}
             />
+            <kbd style={{
+              fontSize: "0.6rem", color: "var(--text-muted)", background: "var(--bg-card)",
+              padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border-subtle)",
+              fontFamily: "var(--font-mono)", lineHeight: 1,
+            }}>⌘K</kbd>
           </div>
           
           {/* Search Dropdown */}
@@ -145,17 +210,50 @@ export default function TopBar() {
                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
               >
                 <p style={{ color: "var(--accent-blue)", fontWeight: 600, fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 6 }}>
-                  <Search size={12} /> Search audit logs for "{searchQuery}"
+                  <Search size={12} /> Search audit logs for &quot;{searchQuery}&quot;
                 </p>
               </button>
             </div>
           )}
         </div>
 
+        {/* Help */}
+        <a
+          href="https://github.com/Eternal-prithivi/aws-provision-using-terraform/blob/main/docs/README.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            background: "var(--bg-input)", border: "1px solid var(--border-subtle)",
+            borderRadius: "var(--radius-sm)", padding: "8px",
+            color: "var(--text-secondary)", cursor: "pointer",
+            display: "flex", alignItems: "center",
+            transition: "all 0.25s ease", textDecoration: "none"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "var(--text-primary)";
+            e.currentTarget.style.borderColor = "var(--border-medium)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "var(--text-secondary)";
+            e.currentTarget.style.borderColor = "var(--border-subtle)";
+          }}
+          title="Help Center"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </a>
+
         {/* Notifications */}
         <div style={{ position: "relative" }}>
           <button
-            onClick={() => setShowNotifications(!showNotifications)}
+            id="topbar-notifications"
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              if (!showNotifications) loadNotifications();
+            }}
             style={{
               background: "var(--bg-input)", border: "1px solid var(--border-subtle)",
               borderRadius: "var(--radius-sm)", padding: "8px",
@@ -166,25 +264,79 @@ export default function TopBar() {
             title="Notifications"
           >
             <Bell size={16} />
-            <div style={{
-              position: "absolute", top: 4, right: 4, width: 6, height: 6,
-              borderRadius: "50%", background: "var(--accent-indigo)",
-              boxShadow: "0 0 8px rgba(99,102,241,0.5)",
-            }} />
+            {notifCount > 0 && (
+              <div style={{
+                position: "absolute", top: 3, right: 3,
+                minWidth: 16, height: 16, borderRadius: "50%",
+                background: "linear-gradient(135deg, #f43f5e, #e11d48)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "0.55rem", fontWeight: 700, color: "white",
+                boxShadow: "0 0 8px rgba(244,63,94,0.4)",
+                padding: "0 4px",
+              }}>
+                {notifCount > 9 ? "9+" : notifCount}
+              </div>
+            )}
           </button>
-          
+        
           {showNotifications && (
-            <div className="glass-card" style={{ position: "absolute", top: "100%", right: 0, marginTop: 8, width: 280, padding: 16, zIndex: 50, border: "1px solid var(--border-medium)" }}>
-              <h4 style={{ fontWeight: 700, fontSize: "0.85rem", marginBottom: 12 }}>Notifications</h4>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ fontSize: "0.75rem", padding: "8px 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                  <p style={{ color: "var(--text-primary)", fontWeight: 600 }}>Policy Check Passed</p>
-                  <p style={{ color: "var(--text-muted)", marginTop: 4 }}>Last deployment passed all checks.</p>
-                </div>
-                <div style={{ fontSize: "0.75rem", padding: "8px 0" }}>
-                  <p style={{ color: "var(--text-primary)", fontWeight: 600 }}>System Updated</p>
-                  <p style={{ color: "var(--text-muted)", marginTop: 4 }}>Phase 15 features have been rolled out.</p>
-                </div>
+            <div className="glass-card" style={{
+              position: "absolute", top: "100%", right: 0, marginTop: 8,
+              width: 360, maxHeight: 440, overflow: "hidden", zIndex: 50,
+              border: "1px solid var(--border-medium)",
+              display: "flex", flexDirection: "column",
+            }}>
+              <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h4 style={{ fontWeight: 700, fontSize: "0.9rem" }}>Notifications</h4>
+                <span className="badge badge-info" style={{ fontSize: "0.65rem" }}>{notifCount} new</span>
+              </div>
+              <div style={{ overflowY: "auto", flex: 1, maxHeight: 360 }}>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: 32, textAlign: "center" }}>
+                    <Bell size={32} color="var(--text-muted)" style={{ margin: "0 auto 12px", opacity: 0.3 }} />
+                    <p style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>All clear — no notifications</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => {
+                    const Icon = NOTIFICATION_ICONS[n.type] || Bell;
+                    const color = SEVERITY_COLORS[n.severity] || "var(--text-muted)";
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => handleNotificationClick(n)}
+                        style={{
+                          width: "100%", textAlign: "left", padding: "12px 16px",
+                          border: "none", background: "transparent",
+                          cursor: "pointer", transition: "background 0.2s",
+                          borderBottom: "1px solid var(--border-subtle)",
+                          display: "flex", gap: 12, alignItems: "flex-start",
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "rgba(99,102,241,0.04)"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                      >
+                        <div style={{
+                          width: 32, height: 32, borderRadius: "var(--radius-sm)",
+                          background: `${color}15`, display: "flex", alignItems: "center",
+                          justifyContent: "center", flexShrink: 0, marginTop: 2,
+                        }}>
+                          <Icon size={15} color={color} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <p style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--text-primary)" }}>{n.title}</p>
+                            <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", whiteSpace: "nowrap", marginLeft: 8 }}>
+                              {formatTime(n.timestamp)}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {n.message}
+                          </p>
+                        </div>
+                        <ExternalLink size={12} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: 4 }} />
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -193,6 +345,7 @@ export default function TopBar() {
         {/* User Avatar Menu */}
         <div style={{ position: "relative" }}>
           <div
+            id="topbar-user-menu"
             onClick={() => setShowUserMenu(!showUserMenu)}
             style={{
               display: "flex", alignItems: "center", gap: "10px",
@@ -222,12 +375,40 @@ export default function TopBar() {
           </div>
           
           {showUserMenu && (
-            <div className="glass-card" style={{ position: "absolute", top: "100%", right: 0, marginTop: 8, width: 160, padding: 8, zIndex: 50, border: "1px solid var(--border-medium)", display: "flex", flexDirection: "column", gap: 4 }}>
-              <button className="btn-secondary" onClick={() => { setShowUserMenu(false); router.push("/settings"); }} style={{ width: "100%", justifyContent: "flex-start", padding: "8px 12px", border: "none", background: "transparent" }}>
-                <Settings size={14} /> Settings
+            <div className="glass-card" style={{ position: "absolute", top: "100%", right: 0, marginTop: 8, width: 200, padding: 8, zIndex: 50, border: "1px solid var(--border-medium)", display: "flex", flexDirection: "column", gap: 2 }}>
+              {/* User Info */}
+              <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-subtle)", marginBottom: 4 }}>
+                <p style={{ fontWeight: 700, fontSize: "0.85rem", color: "var(--text-primary)" }}>{user?.name || "User"}</p>
+                <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 2 }}>@{user?.username || "user"}</p>
+                <span className={`badge ${user?.role === "admin" ? "badge-purple" : user?.role === "devops" ? "badge-info" : "badge-success"}`} style={{ marginTop: 6, fontSize: "0.65rem" }}>
+                  {user?.role || "viewer"}
+                </span>
+              </div>
+              <button
+                onClick={() => { setShowUserMenu(false); router.push("/settings"); }}
+                style={{
+                  width: "100%", textAlign: "left", padding: "9px 12px",
+                  border: "none", background: "transparent", borderRadius: "var(--radius-xs)",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
+                  fontSize: "0.82rem", color: "var(--text-secondary)", transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+              >
+                <Settings size={15} /> Settings
               </button>
-              <button className="btn-danger" onClick={handleLogout} style={{ width: "100%", justifyContent: "flex-start", padding: "8px 12px", border: "none", background: "transparent", color: "var(--accent-red)" }}>
-                <LogOut size={14} /> Logout
+              <button
+                onClick={handleLogout}
+                style={{
+                  width: "100%", textAlign: "left", padding: "9px 12px",
+                  border: "none", background: "transparent", borderRadius: "var(--radius-xs)",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
+                  fontSize: "0.82rem", color: "var(--accent-red)", transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "var(--accent-red-glow)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                <LogOut size={15} /> Logout
               </button>
             </div>
           )}
